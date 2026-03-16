@@ -12,6 +12,13 @@ namespace IconChop
         public List<string> OutputDirMru { get; set; } = [];
         public const int MruMax = 12;
 
+        public int? FormX { get; set; }
+        public int? FormY { get; set; }
+        public int? FormWidth { get; set; }
+        public int? FormHeight { get; set; }
+        /// <summary>One of: "Normal", "Maximized", "Minimized"</summary>
+        public string? FormWindowState { get; set; }
+
         public static string SettingsPath =>
             Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

@@ -28,6 +28,11 @@ namespace IconChop
         {
             _initialFilePath = initialFilePath;
             InitializeComponent();
+            try
+            {
+                Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? Icon;
+            }
+            catch { /* use default if exe icon unavailable */ }
             SetupDragDrop();
             Load += Form1_Load;
             FormClosing += Form1_FormClosing;
@@ -35,6 +40,8 @@ namespace IconChop
 
         private void Form1_Load(object? sender, EventArgs e)
         {
+            RestoreFormBounds();
+            UpdateContextMenuButtonText();
             chkAutoReload.Checked = _settings.AutoReloadInput;
             var fmt = _settings.OutputFormat;
             cboOutputFormat.SelectedIndex = fmt == "Ico" ? 1 : fmt == "Both" ? 2 : 0;
@@ -77,7 +84,39 @@ namespace IconChop
                 _settings.OutputDirMru = mru.Take(AppSettings.MruMax).ToList();
             }
             _settings.LastInputPath = _currentInputPath;
+            SaveFormBounds();
             _settings.Save();
+        }
+
+        private void RestoreFormBounds()
+        {
+            if (_settings.FormWidth is not { } w || _settings.FormHeight is not { } h || w < 100 || h < 100)
+                return;
+            var x = _settings.FormX ?? 0;
+            var y = _settings.FormY ?? 0;
+            var bounds = new Rectangle(x, y, w, h);
+            var working = Screen.GetWorkingArea(bounds);
+            bounds.X = Math.Clamp(bounds.X, working.Left, working.Right - Math.Min(bounds.Width, working.Width));
+            bounds.Y = Math.Clamp(bounds.Y, working.Top, working.Bottom - Math.Min(bounds.Height, working.Height));
+            StartPosition = FormStartPosition.Manual;
+            Bounds = bounds;
+            if (_settings.FormWindowState == "Maximized")
+                WindowState = FormWindowState.Maximized;
+        }
+
+        private void SaveFormBounds()
+        {
+            var bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+            _settings.FormX = bounds.X;
+            _settings.FormY = bounds.Y;
+            _settings.FormWidth = bounds.Width;
+            _settings.FormHeight = bounds.Height;
+            _settings.FormWindowState = WindowState switch
+            {
+                FormWindowState.Maximized => "Maximized",
+                FormWindowState.Minimized => "Minimized",
+                _ => "Normal"
+            };
         }
 
         private void SetupDragDrop()
@@ -105,6 +144,36 @@ namespace IconChop
         // -------------------------------------------------------------------
         //  Image loading
         // -------------------------------------------------------------------
+
+        private void UpdateContextMenuButtonText()
+        {
+            btnContextMenu.Text = ExplorerContextMenu.IsRegistered()
+                ? "Remove from Explorer context menu"
+                : "Add to Explorer context menu";
+        }
+
+        private void BtnContextMenu_Click(object? sender, EventArgs e)
+        {
+            bool ok;
+            if (ExplorerContextMenu.IsRegistered())
+                ok = ExplorerContextMenu.Unregister();
+            else
+                ok = ExplorerContextMenu.Register();
+
+            if (ok)
+            {
+                UpdateContextMenuButtonText();
+                string msg = ExplorerContextMenu.IsRegistered()
+                    ? "Context menu \"Open with IconChop\" is now on image files (e.g. .png, .jpg)."
+                    : "Context menu \"Open with IconChop\" has been removed from image files.";
+                lblStatus.Text = msg;
+            }
+            else
+            {
+                MessageBox.Show("Could not update the Explorer context menu. Try running as administrator or check permissions.",
+                    "Context menu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
 
         private void BtnLoadImage_Click(object? sender, EventArgs e)
         {

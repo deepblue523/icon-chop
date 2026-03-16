@@ -1,0 +1,74 @@
+# Bump Version and AssemblyVersion in IconChop.csproj, commit, push, and create a tag.
+# Pushing the tag triggers the Release workflow to build and publish.
+# Run manually: Actions -> Version bump -> Run workflow (choose patch / minor / major).
+
+name: Version bump
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # push commit and tag
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read current version
+        id: current
+        run: |
+          V=$(sed -n 's/.*<Version>\([^<]*\)<\/Version>.*/\1/p' IconChop.csproj | head -1)
+          V=${V:-0.0.0}
+          echo "version=$V" >> $GITHUB_OUTPUT
+          echo "Current version: $V"
+
+      - name: Bump version
+        id: bump
+        run: |
+          V="${{ steps.current.outputs.version }}"
+          IFS='.' read -r major minor patch <<< "$V"
+          patch=${patch:-0}
+          minor=${minor:-0}
+          major=${major:-0}
+          case "${{ github.event.inputs.bump }}" in
+            major) major=$((major+1)); minor=0; patch=0 ;;
+            minor) minor=$((minor+1)); patch=0 ;;
+            patch) patch=$((patch+1)) ;;
+          esac
+          NEW="${major}.${minor}.${patch}"
+          echo "new_version=$NEW" >> $GITHUB_OUTPUT
+          echo "New version: $NEW"
+
+      - name: Update IconChop.csproj
+        run: |
+          NEW="${{ steps.bump.outputs.new_version }}"
+          sed -i "s/<Version>[^<]*<\/Version>/<Version>${NEW}<\/Version>/" IconChop.csproj
+          sed -i "s/<AssemblyVersion>[^<]*<\/AssemblyVersion>/<AssemblyVersion>${NEW}.0<\/AssemblyVersion>/" IconChop.csproj
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add IconChop.csproj
+          git commit -m "Bump version to ${{ steps.bump.outputs.new_version }}"
+          git push
+
+      - name: Create and push tag
+        run: |
+          git tag "v${{ steps.bump.outputs.new_version }}"
+          git push origin "v${{ steps.bump.outputs.new_version }}"
