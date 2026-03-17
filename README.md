@@ -31,9 +31,9 @@ dotnet run
 
 For a release package:
 
-- **Both variants (local):**  
+- **Both variants + MSI (local):**  
   `.\Create-Release-All.ps1`  
-  Produces `release\IconChop-<version>.zip` and `release\IconChop-<version>-self-contained.zip`.
+  Produces `release\IconChop-<version>.zip`, `release\IconChop-<version>-self-contained.zip`, and `release\IconChop-<version>.msi`.
 
 - **Framework-dependent only** (needs .NET 8 on the target PC):  
   `.\Create-Release.ps1`
@@ -44,7 +44,7 @@ For a release package:
 ### GitHub releases (automated)
 
 1. **Bump version and start a release:** In GitHub, go to **Actions → Version bump**, click **Run workflow**, choose **patch** (or **minor** / **major**), then **Run**. The workflow updates `IconChop.csproj`, commits, and pushes a tag (e.g. `v1.0.1`).
-2. **Build and publish:** The **Release** workflow runs on that tag: it builds both the framework-dependent and self-contained packages and creates a GitHub Release with both zip files attached.
+2. **Build and publish:** The **Release** workflow runs on that tag: it builds the framework-dependent zip, self-contained zip, and Windows MSI installer, then creates a GitHub Release with all three attached.
 
 ## Usage summary
 

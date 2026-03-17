@@ -26,7 +26,8 @@ Write-Host ""
 # Clean and publish (self-contained; includes .NET runtime)
 Write-Host "Publishing (Release, self-contained win-x64)..." -ForegroundColor Yellow
 if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
-dotnet publish IconChop.csproj -c Release -r win-x64 --self-contained true -o $publishDir
+# Limit to en-US satellites so WiX harvest has no culture subfolders and MSI builds cleanly
+dotnet publish IconChop.csproj -c Release -r win-x64 --self-contained true -o $publishDir -p:SatelliteResourceLanguages=en-US
 
 if (-not (Test-Path $publishDir)) {
     Write-Error "Publish failed: output folder not found."
@@ -39,8 +40,21 @@ if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Write-Host "Creating zip: $zipName" -ForegroundColor Yellow
 Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $zipPath -Force
 
+# Build MSI (same publish folder is harvested by WiX)
+$msiName = "IconChop-$version.msi"
+$msiPath = Join-Path $releaseDir $msiName
+Write-Host "Building MSI: $msiName" -ForegroundColor Yellow
+$publishPathFull = (Resolve-Path $publishDir).Path
+dotnet build IconChop.Setup.wixproj -c Release -p:Version=$version -p:PublishPath=$publishPathFull -nologo -v:minimal
+if ($LASTEXITCODE -ne 0) { throw "MSI build failed." }
+$builtMsi = Join-Path $projectDir "bin\Release\IconChop.Setup.msi"
+if (Test-Path $builtMsi) {
+    Copy-Item $builtMsi $msiPath -Force
+    Write-Host "  MSI: $msiPath" -ForegroundColor Green
+}
+
 # Optional: remove publish folder to avoid clutter
 Remove-Item $publishDir -Recurse -Force
 
 Write-Host ""
-Write-Host "Done. Release package: $zipPath" -ForegroundColor Green
+Write-Host "Done. Release packages: $zipPath, $msiPath" -ForegroundColor Green

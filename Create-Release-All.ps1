@@ -1,6 +1,6 @@
-# Create-Release-All.ps1 - Build and package both framework-dependent and self-contained releases
+# Create-Release-All.ps1 - Build and package both framework-dependent and self-contained releases, plus MSI
 # Run from the project root (same folder as IconChop.csproj).
-# Output: release\IconChop-<version>.zip and release\IconChop-<version>-self-contained.zip
+# Output: release\IconChop-<version>.zip, release\IconChop-<version>-self-contained.zip, release\IconChop-<version>.msi
 
 $ErrorActionPreference = "Stop"
 $projectDir = $PSScriptRoot
@@ -17,4 +17,4 @@ Write-Host ""
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host ""
-Write-Host "All release packages are in: $(Join-Path $projectDir 'release')" -ForegroundColor Green
+Write-Host "All release packages (zips + MSI) are in: $(Join-Path $projectDir 'release')" -ForegroundColor Green
