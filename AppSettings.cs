@@ -12,6 +12,10 @@ namespace IconChop
         public List<string> OutputDirMru { get; set; } = [];
         public const int MruMax = 12;
 
+        /// <summary>Last-used image-generation prompts (newest first).</summary>
+        public List<string> PromptMru { get; set; } = [];
+        public const int PromptMruMax = 10;
+
         public int? FormX { get; set; }
         public int? FormY { get; set; }
         public int? FormWidth { get; set; }
@@ -19,21 +23,62 @@ namespace IconChop
         /// <summary>One of: "Normal", "Maximized", "Minimized"</summary>
         public string? FormWindowState { get; set; }
 
-        public static string SettingsPath =>
+        // OpenAI Images API (POST {BaseUrl}/images/generations)
+        public string? OpenAiApiKey { get; set; }
+        public string OpenAiApiBaseUrl { get; set; } = "https://api.openai.com/v1";
+        public string OpenAiImageModel { get; set; } = "dall-e-3";
+        public string OpenAiImageSize { get; set; } = "1024x1024";
+        /// <summary>For dall-e-3: standard or hd.</summary>
+        public string OpenAiImageQuality { get; set; } = "standard";
+
+        /// <summary>~/.icon-chop/config.json on Unix; %USERPROFILE%\icon-chop\config.json on Windows.</summary>
+        public static string ConfigPath =>
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "icon-chop",
+                "config.json");
+
+        /// <summary>Previous location; read once for migration if <see cref="ConfigPath"/> is missing.</summary>
+        public static string LegacySettingsPath =>
             Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "IconChop",
                 "settings.json");
 
+        private static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new()
+        {
+            WriteIndented = true
+        };
+
         public static AppSettings Load()
         {
             try
             {
-                var path = SettingsPath;
-                if (!File.Exists(path)) return new AppSettings();
-                var json = File.ReadAllText(path);
-                var settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(json);
-                return settings ?? new AppSettings();
+                if (File.Exists(ConfigPath))
+                {
+                    var json = File.ReadAllText(ConfigPath);
+                    var settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
+                    return settings ?? new AppSettings();
+                }
+
+                if (File.Exists(LegacySettingsPath))
+                {
+                    var json = File.ReadAllText(LegacySettingsPath);
+                    var settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
+                    var result = settings ?? new AppSettings();
+                    try
+                    {
+                        result.Save();
+                    }
+                    catch
+                    {
+                        // keep in-memory settings even if new path is not writable
+                    }
+
+                    return result;
+                }
+
+                return new AppSettings();
             }
             catch
             {
@@ -45,11 +90,11 @@ namespace IconChop
         {
             try
             {
-                var path = SettingsPath;
+                var path = ConfigPath;
                 var dir = Path.GetDirectoryName(path);
                 if (!string.IsNullOrEmpty(dir))
                     Directory.CreateDirectory(dir);
-                var json = System.Text.Json.JsonSerializer.Serialize(this, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                var json = System.Text.Json.JsonSerializer.Serialize(this, JsonOptions);
                 File.WriteAllText(path, json);
             }
             catch

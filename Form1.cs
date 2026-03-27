@@ -41,8 +41,6 @@ namespace IconChop
         private void Form1_Load(object? sender, EventArgs e)
         {
             RestoreFormBounds();
-            UpdateContextMenuButtonText();
-            chkAutoReload.Checked = _settings.AutoReloadInput;
             var fmt = _settings.OutputFormat;
             cboOutputFormat.SelectedIndex = fmt == "Ico" ? 1 : fmt == "Both" ? 2 : 0;
             txtOutputPrefix.Text = _settings.OutputPrefix ?? "icon";
@@ -64,7 +62,6 @@ namespace IconChop
         private void Form1_FormClosing(object? sender, FormClosingEventArgs e)
         {
             StopFileWatcher();
-            _settings.AutoReloadInput = chkAutoReload.Checked;
             _settings.OutputFormat = cboOutputFormat.SelectedIndex switch { 1 => "Ico", 2 => "Both", _ => "Png" };
             var pre = (txtOutputPrefix.Text ?? "").Trim();
             _settings.OutputPrefix = string.IsNullOrEmpty(pre) ? "icon" : pre;
@@ -145,34 +142,28 @@ namespace IconChop
         //  Image loading
         // -------------------------------------------------------------------
 
-        private void UpdateContextMenuButtonText()
+        private void BtnSettings_Click(object? sender, EventArgs e)
         {
-            btnContextMenu.Text = ExplorerContextMenu.IsRegistered()
-                ? "Remove from Explorer context menu"
-                : "Add to Explorer context menu";
+            using var dlg = new SettingsForm(_settings);
+            dlg.ShowDialog(this);
         }
 
-        private void BtnContextMenu_Click(object? sender, EventArgs e)
+        private void MnuImageGenerate_Click(object? sender, EventArgs e)
         {
-            bool ok;
-            if (ExplorerContextMenu.IsRegistered())
-                ok = ExplorerContextMenu.Unregister();
-            else
-                ok = ExplorerContextMenu.Register();
+            using var dlg = new ImageGenerateForm(_settings);
+            if (dlg.ShowDialog(this) == DialogResult.OK && dlg.AcceptedImage != null)
+                ApplyGeneratedImage(dlg.AcceptedImage);
+        }
 
-            if (ok)
-            {
-                UpdateContextMenuButtonText();
-                string msg = ExplorerContextMenu.IsRegistered()
-                    ? "Context menu \"Open with IconChop\" is now on image files (e.g. .png, .jpg)."
-                    : "Context menu \"Open with IconChop\" has been removed from image files.";
-                lblStatus.Text = msg;
-            }
-            else
-            {
-                MessageBox.Show("Could not update the Explorer context menu. Try running as administrator or check permissions.",
-                    "Context menu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
+        private void ApplyGeneratedImage(Bitmap newImage)
+        {
+            StopFileWatcher();
+            _sourceImage?.Dispose();
+            _sourceImage = newImage;
+            picSource.Image = _sourceImage;
+            _currentInputPath = null;
+            Text = "IconChop — (generated image)";
+            DetectAndPreview();
         }
 
         private void BtnLoadImage_Click(object? sender, EventArgs e)
@@ -197,9 +188,8 @@ namespace IconChop
                 picSource.Image = _sourceImage;
                 _currentInputPath = path;
                 Text = $"IconChop — {Path.GetFileName(path)}";
-                lblStatus.Text = $"{_sourceImage.Width}\u00d7{_sourceImage.Height}";
                 DetectAndPreview();
-                if (chkAutoReload.Checked && !string.IsNullOrEmpty(path))
+                if (_settings.AutoReloadInput && !string.IsNullOrEmpty(path))
                     StartFileWatcher(path);
             }
             catch (Exception ex)
@@ -308,7 +298,6 @@ namespace IconChop
             }
 
             UpdatePreviewCountLabel();
-            lblStatus.Text = $"{_sourceImage.Width}\u00d7{_sourceImage.Height}  —  {_detectedIcons.Count} icons";
             Cursor = Cursors.Default;
         }
 
@@ -766,7 +755,6 @@ namespace IconChop
                 }
 
                 Cursor = Cursors.Default;
-                lblStatus.Text = $"Exported {written} files to {outDir}";
                 MessageBox.Show($"Successfully exported {written} icon files.",
                     "Export complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }

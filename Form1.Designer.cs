@@ -18,14 +18,17 @@ namespace IconChop
             components = new System.ComponentModel.Container();
 
             panelTop = new Panel();
-            btnLoadImage = new Button();
-            btnContextMenu = new Button();
-            lblStatus = new Label();
+            menuStripMain = new MenuStrip();
+            mnuFile = new ToolStripMenuItem();
+            mnuLoadImage = new ToolStripMenuItem();
+            mnuImage = new ToolStripMenuItem();
+            mnuImageGenerate = new ToolStripMenuItem();
+            mnuTools = new ToolStripMenuItem();
+            mnuSettings = new ToolStripMenuItem();
             lblSizes = new Label();
             panelSizes = new FlowLayoutPanel();
             lblOutputDir = new Label();
             cboOutputDir = new ComboBox();
-            chkAutoReload = new CheckBox();
             lblOutputFormat = new Label();
             cboOutputFormat = new ComboBox();
             lblOutputPrefix = new Label();
@@ -50,6 +53,38 @@ namespace IconChop
             ((System.ComponentModel.ISupportInitialize)picSource).BeginInit();
             SuspendLayout();
 
+            // menuStripMain
+            menuStripMain.Dock = DockStyle.Top;
+            menuStripMain.Items.AddRange(new ToolStripItem[] { mnuFile, mnuImage, mnuTools });
+            menuStripMain.Location = new Point(0, 0);
+            menuStripMain.Size = new Size(1280, 24);
+            menuStripMain.TabIndex = 0;
+            menuStripMain.Text = "menuStripMain";
+
+            // mnuFile
+            mnuFile.DropDownItems.AddRange(new ToolStripItem[] { mnuLoadImage });
+            mnuFile.Text = "&File";
+
+            // mnuLoadImage
+            mnuLoadImage.Text = "Load &Image...";
+            mnuLoadImage.Click += BtnLoadImage_Click;
+
+            // mnuImage
+            mnuImage.DropDownItems.AddRange(new ToolStripItem[] { mnuImageGenerate });
+            mnuImage.Text = "&Image";
+
+            // mnuImageGenerate
+            mnuImageGenerate.Text = "&Generate…";
+            mnuImageGenerate.Click += MnuImageGenerate_Click;
+
+            // mnuTools
+            mnuTools.DropDownItems.AddRange(new ToolStripItem[] { mnuSettings });
+            mnuTools.Text = "&Tools";
+
+            // mnuSettings
+            mnuSettings.Text = "&Settings...";
+            mnuSettings.Click += BtnSettings_Click;
+
             // panelTop
             panelTop.Controls.Add(btnChop);
             panelTop.Controls.Add(btnBrowse);
@@ -58,53 +93,24 @@ namespace IconChop
             panelTop.Controls.Add(cboOutputDir);
             panelTop.Controls.Add(cboOutputFormat);
             panelTop.Controls.Add(lblOutputFormat);
-            panelTop.Controls.Add(chkAutoReload);
-            panelTop.Controls.Add(btnContextMenu);
             panelTop.Controls.Add(lblOutputDir);
             panelTop.Controls.Add(panelSizes);
             panelTop.Controls.Add(lblSizes);
-            panelTop.Controls.Add(lblStatus);
-            panelTop.Controls.Add(btnLoadImage);
             panelTop.Dock = DockStyle.Top;
             panelTop.Location = new Point(0, 0);
-            panelTop.Size = new Size(1280, 155);
+            // Fit content only — extra height here showed as empty gray above Source Image
+            panelTop.Size = new Size(1280, 110);
             panelTop.BackColor = Color.FromArgb(248, 248, 248);
             panelTop.BorderStyle = BorderStyle.FixedSingle;
 
-            // btnLoadImage
-            btnLoadImage.Location = new Point(14, 12);
-            btnLoadImage.Size = new Size(120, 30);
-            btnLoadImage.Text = "Load Image...";
-            btnLoadImage.FlatStyle = FlatStyle.Flat;
-            btnLoadImage.BackColor = Color.FromArgb(0, 122, 204);
-            btnLoadImage.ForeColor = Color.White;
-            btnLoadImage.FlatAppearance.BorderSize = 0;
-            btnLoadImage.Cursor = Cursors.Hand;
-            btnLoadImage.Click += BtnLoadImage_Click;
-
-            // btnContextMenu
-            btnContextMenu.Location = new Point(140, 12);
-            btnContextMenu.Size = new Size(180, 30);
-            btnContextMenu.FlatStyle = FlatStyle.Flat;
-            btnContextMenu.BackColor = Color.FromArgb(230, 230, 230);
-            btnContextMenu.FlatAppearance.BorderColor = Color.FromArgb(180, 180, 180);
-            btnContextMenu.Cursor = Cursors.Hand;
-            btnContextMenu.Click += BtnContextMenu_Click;
-
-            // lblStatus
-            lblStatus.AutoSize = true;
-            lblStatus.Location = new Point(330, 18);
-            lblStatus.ForeColor = Color.FromArgb(120, 120, 120);
-            lblStatus.Text = "No image loaded — load a sheet or drag && drop onto the source area.";
-
             // lblSizes
             lblSizes.AutoSize = true;
-            lblSizes.Location = new Point(14, 54);
+            lblSizes.Location = new Point(14, 12);
             lblSizes.Text = "Output Sizes:";
             lblSizes.Font = new Font(SystemFonts.DefaultFont.FontFamily, 9F, FontStyle.Bold);
 
             // panelSizes
-            panelSizes.Location = new Point(114, 49);
+            panelSizes.Location = new Point(114, 8);
             panelSizes.Size = new Size(800, 30);
             panelSizes.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             panelSizes.WrapContents = false;
@@ -125,34 +131,27 @@ namespace IconChop
 
             // lblOutputDir
             lblOutputDir.AutoSize = true;
-            lblOutputDir.Location = new Point(14, 93);
+            lblOutputDir.Location = new Point(14, 46);
             lblOutputDir.Text = "Output Folder:";
             lblOutputDir.Font = new Font(SystemFonts.DefaultFont.FontFamily, 9F, FontStyle.Bold);
 
             // cboOutputDir
-            cboOutputDir.Location = new Point(114, 90);
+            cboOutputDir.Location = new Point(114, 43);
             cboOutputDir.Size = new Size(720, 23);
             cboOutputDir.Anchor = AnchorStyles.Top | AnchorStyles.Left;
             cboOutputDir.DropDownStyle = ComboBoxStyle.DropDown;
             cboOutputDir.MaxDropDownItems = 12;
             cboOutputDir.BackColor = Color.White;
 
-            // chkAutoReload
-            chkAutoReload.AutoSize = true;
-            chkAutoReload.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            chkAutoReload.Location = new Point(1055, 16);
-            chkAutoReload.Text = "Auto-reload when file changes";
-            chkAutoReload.ForeColor = Color.FromArgb(100, 100, 100);
-
             // lblOutputFormat (below Output Folder row)
             lblOutputFormat.AutoSize = true;
-            lblOutputFormat.Location = new Point(14, 121);
+            lblOutputFormat.Location = new Point(14, 76);
             lblOutputFormat.Text = "Format:";
             lblOutputFormat.Font = new Font(SystemFonts.DefaultFont.FontFamily, 9F, FontStyle.Bold);
 
             // cboOutputFormat
             cboOutputFormat.DropDownStyle = ComboBoxStyle.DropDownList;
-            cboOutputFormat.Location = new Point(114, 118);
+            cboOutputFormat.Location = new Point(114, 73);
             cboOutputFormat.Size = new Size(140, 23);
             cboOutputFormat.Items.AddRange(new object[] { "PNG only", "ICO only", "PNG and ICO" });
             cboOutputFormat.SelectedIndex = 0;
@@ -160,19 +159,19 @@ namespace IconChop
 
             // lblOutputPrefix
             lblOutputPrefix.AutoSize = true;
-            lblOutputPrefix.Location = new Point(844, 93);
+            lblOutputPrefix.Location = new Point(844, 46);
             lblOutputPrefix.Text = "Prefix:";
             lblOutputPrefix.Font = new Font(SystemFonts.DefaultFont.FontFamily, 9F, FontStyle.Bold);
 
             // txtOutputPrefix
-            txtOutputPrefix.Location = new Point(893, 90);
+            txtOutputPrefix.Location = new Point(893, 43);
             txtOutputPrefix.Size = new Size(110, 23);
             txtOutputPrefix.MaxLength = 80;
             txtOutputPrefix.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             txtOutputPrefix.BackColor = Color.White;
 
             // btnBrowse
-            btnBrowse.Location = new Point(1013, 88);
+            btnBrowse.Location = new Point(1013, 41);
             btnBrowse.Size = new Size(90, 28);
             btnBrowse.Text = "Browse...";
             btnBrowse.FlatStyle = FlatStyle.Flat;
@@ -183,7 +182,7 @@ namespace IconChop
             btnBrowse.Click += BtnBrowse_Click;
 
             // btnChop
-            btnChop.Location = new Point(1115, 84);
+            btnChop.Location = new Point(1130, 65);
             btnChop.Size = new Size(140, 35);
             btnChop.Text = "\u2702  Chop Icons";
             btnChop.FlatStyle = FlatStyle.Flat;
@@ -285,6 +284,8 @@ namespace IconChop
             ClientSize = new Size(1280, 860);
             Controls.Add(splitMain);
             Controls.Add(panelTop);
+            Controls.Add(menuStripMain);
+            MainMenuStrip = menuStripMain;
             MinimumSize = new Size(900, 600);
             StartPosition = FormStartPosition.CenterScreen;
             Text = "IconChop \u2014 Icon Sheet Slicer";
@@ -302,15 +303,18 @@ namespace IconChop
 
         #endregion
 
+        private MenuStrip menuStripMain;
+        private ToolStripMenuItem mnuFile;
+        private ToolStripMenuItem mnuLoadImage;
+        private ToolStripMenuItem mnuImage;
+        private ToolStripMenuItem mnuImageGenerate;
+        private ToolStripMenuItem mnuTools;
+        private ToolStripMenuItem mnuSettings;
         private Panel panelTop;
-        private Button btnLoadImage;
-        private Button btnContextMenu;
-        private Label lblStatus;
         private Label lblSizes;
         private FlowLayoutPanel panelSizes;
         private Label lblOutputDir;
         private ComboBox cboOutputDir;
-        private CheckBox chkAutoReload;
         private Label lblOutputFormat;
         private ComboBox cboOutputFormat;
         private Label lblOutputPrefix;
