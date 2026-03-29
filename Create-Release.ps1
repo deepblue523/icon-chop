@@ -1,18 +1,27 @@
 # Create-Release.ps1 - Build and package IconChop for release (framework-dependent)
 # Run from the project root (same folder as IconChop.csproj).
 # Requires .NET 8 runtime on target machine. For a self-contained build, use Create-Release-SelfContained.ps1.
+# Pass -Version to override the version from csproj (used by Create-Release-All.ps1 after a bump).
+
+param(
+    [string]$Version
+)
 
 $ErrorActionPreference = "Stop"
 $projectDir = $PSScriptRoot
 $releaseDir = Join-Path $projectDir "release"
 $publishDir = Join-Path $projectDir "publish"
 
-# Read version from csproj (fallback to 1.0.0)
-$csprojPath = Join-Path $projectDir "IconChop.csproj"
-$version = "1.0.0"
-if (Test-Path $csprojPath) {
-    $content = Get-Content $csprojPath -Raw
-    if ($content -match '<Version>([^<]+)</Version>') { $version = $Matches[1].Trim() }
+# Use provided version or read from csproj (fallback to 1.0.0)
+if ($Version) {
+    $version = $Version
+} else {
+    $csprojPath = Join-Path $projectDir "IconChop.csproj"
+    $version = "1.0.0"
+    if (Test-Path $csprojPath) {
+        $content = Get-Content $csprojPath -Raw
+        if ($content -match '<Version>([^<]+)</Version>') { $version = $Matches[1].Trim() }
+    }
 }
 
 $zipName = "IconChop-$version.zip"
