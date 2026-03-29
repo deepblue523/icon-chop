@@ -25,6 +25,7 @@
       <ComponentGroupName>HarvestedApp</ComponentGroupName>
       <DirectoryRefId>INSTALLFOLDER</DirectoryRefId>
       <SuppressRootDirectory>true</SuppressRootDirectory>
+      <SuppressSpecificWarnings>5151</SuppressSpecificWarnings>
     </HarvestDirectory>
   </ItemGroup>
 </Project>

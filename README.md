@@ -3,6 +3,8 @@
 **IconChop** is a Windows desktop app that splits a single image containing multiple icons (an *icon sheet* or *sprite sheet*) into individual icon files. It detects the grid of icons automatically, lets you choose which ones to export, and saves them as PNG and/or multi-size ICO files. All resulting icons are written with transparent backgrounds. There
 is also support for Windows Explorer context menu to easily open an icon sheet.
 
+![IconChop main interface](./images/interface-main.png)
+
 ## What it does
 
 - **Load an icon sheet** — Open a PNG, BMP, JPG, GIF, or TIFF image that has several icons arranged in a grid (e.g. from a design tool or icon pack).
@@ -15,6 +17,8 @@ is also support for Windows Explorer context menu to easily open an icon sheet.
 ## AI icon generation (OpenAI)
 
 IconChop can generate new icons using OpenAI's image models — useful when you need additional icons that match an existing set's style.
+
+![IconChop image generation interface](./images/interface-gen-image.png)
 
 - **Generate from a prompt** — Open **Image → Generate…**, type a description of the icons you want, and hit **Generate**. The result is returned as a new icon sheet that feeds straight into the normal detect-and-chop workflow.
 - **Match an existing style with reference images** — Attach up to two reference images in the Generate dialog. The first reference defines the visual style; the optional second reference can supply specific items or a layout to follow. Under the hood IconChop sends these references to OpenAI's image-edits endpoint so the generated icons stay consistent with your existing set.
