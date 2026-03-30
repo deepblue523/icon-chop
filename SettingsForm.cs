@@ -28,6 +28,13 @@ namespace IconChop
 
             var q = (_settings.OpenAiImageQuality ?? "standard").ToLowerInvariant();
             cboQuality.SelectedIndex = q == "hd" ? 1 : 0;
+
+            SelectOrAdd(cboNamingModel, (_settings.OpenAiNamingModel ?? "gpt-4o-mini").Trim());
+
+            txtTextApiKey.Text = _settings.OpenAiTextApiKey ?? "";
+            txtTextBaseUrl.Text = string.IsNullOrWhiteSpace(_settings.OpenAiTextBaseUrl)
+                ? ""
+                : _settings.OpenAiTextBaseUrl.TrimEnd('/');
         }
 
         private void RefreshExplorerButtonText()
@@ -103,6 +110,13 @@ namespace IconChop
             _settings.OpenAiImageModel = model;
             _settings.OpenAiImageSize = size;
             _settings.OpenAiImageQuality = cboQuality.SelectedIndex == 1 ? "hd" : "standard";
+
+            var namingModel = cboNamingModel.Text.Trim();
+            _settings.OpenAiNamingModel = string.IsNullOrEmpty(namingModel) ? "gpt-4o-mini" : namingModel;
+
+            _settings.OpenAiTextApiKey = string.IsNullOrEmpty(txtTextApiKey.Text) ? null : txtTextApiKey.Text;
+            var textBaseUrl = txtTextBaseUrl.Text.Trim().TrimEnd('/');
+            _settings.OpenAiTextBaseUrl = string.IsNullOrEmpty(textBaseUrl) ? null : textBaseUrl;
 
             _settings.Save();
             DialogResult = DialogResult.OK;

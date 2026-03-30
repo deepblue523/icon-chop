@@ -47,6 +47,9 @@ namespace IconChop
             foreach (Control c in panelSizes.Controls)
                 if (c is CheckBox cb && cb.Tag is int sz)
                     cb.Checked = _settings.CheckedSizes.Contains(sz);
+            chkAutoName.Checked = _settings.AutoNameIcons;
+            chkAutoName.CheckedChanged += ChkAutoName_CheckedChanged;
+            txtOutputPrefix.Enabled = !chkAutoName.Checked;
             cboOutputDir.Items.Clear();
             foreach (var path in _settings.OutputDirMru)
                 if (Directory.Exists(path))
@@ -65,6 +68,7 @@ namespace IconChop
             _settings.OutputFormat = cboOutputFormat.SelectedIndex switch { 1 => "Ico", 2 => "Both", _ => "Png" };
             var pre = (txtOutputPrefix.Text ?? "").Trim();
             _settings.OutputPrefix = string.IsNullOrEmpty(pre) ? "icon" : pre;
+            _settings.AutoNameIcons = chkAutoName.Checked;
             _settings.CheckedSizes = panelSizes.Controls
                 .OfType<CheckBox>()
                 .Where(cb => cb.Checked && cb.Tag is int)
@@ -665,11 +669,16 @@ namespace IconChop
             }
         }
 
+        private void ChkAutoName_CheckedChanged(object? sender, EventArgs e)
+        {
+            txtOutputPrefix.Enabled = !chkAutoName.Checked;
+        }
+
         // -------------------------------------------------------------------
         //  Chop & export
         // -------------------------------------------------------------------
 
-        private void BtnChop_Click(object? sender, EventArgs e)
+        private async void BtnChop_Click(object? sender, EventArgs e)
         {
             if (_detectedIcons.Count == 0)
             {
@@ -701,19 +710,61 @@ namespace IconChop
             try
             {
                 Cursor = Cursors.WaitCursor;
+
+                string[] autoNames = [];
+
+                if (chkAutoName.Checked)
+                {
+                    var key = _settings.OpenAiApiKey?.Trim();
+                    if (string.IsNullOrEmpty(key))
+                    {
+                        Cursor = Cursors.Default;
+                        MessageBox.Show(
+                            "Auto-name requires an OpenAI API key.\nConfigure it in Tools \u2192 Settings (Open AI tab).",
+                            "API key required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                    try
+                    {
+                        var iconsToName = indicesToExport.Select(i => _detectedIcons[i]).ToList();
+                        var names = await OpenAiImageClient.SuggestFilenamesAsync(
+                            _settings, iconsToName, CancellationToken.None);
+                        autoNames = [.. names];
+                    }
+                    catch (Exception ex)
+                    {
+                        Cursor = Cursors.Default;
+                        var result = MessageBox.Show(
+                            $"Auto-naming failed:\n{ex.Message}\n\nExport with default naming instead?",
+                            "Auto-name error", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                        if (result != DialogResult.Yes)
+                            return;
+                        Cursor = Cursors.WaitCursor;
+                    }
+                }
+
                 Directory.CreateDirectory(outDir);
                 int written = 0;
                 int exportIndex = 0;
 
-                bool savePng = cboOutputFormat.SelectedIndex is 0 or 2; // PNG only or Both
-                bool saveIco = cboOutputFormat.SelectedIndex is 1 or 2; // ICO only or Both
+                bool savePng = cboOutputFormat.SelectedIndex is 0 or 2;
+                bool saveIco = cboOutputFormat.SelectedIndex is 1 or 2;
                 string prefix = GetOutputPrefix();
                 bool singleIcon = indicesToExport.Count == 1;
 
                 foreach (int idx in indicesToExport)
                 {
                     var iconBitmaps = new List<(int size, Bitmap bmp)>();
-                    string baseName = singleIcon ? prefix : $"{prefix}_{exportIndex + 1:D3}";
+
+                    string baseName;
+                    if (exportIndex < autoNames.Length)
+                        baseName = autoNames[exportIndex];
+                    else if (singleIcon)
+                        baseName = prefix;
+                    else
+                        baseName = $"{prefix}_{exportIndex + 1:D3}";
+
                     try
                     {
                         foreach (int sz in sizes)

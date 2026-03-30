@@ -1,4 +1,4 @@
-# Create-Release-SelfContained.ps1 - Build and package IconChop for release (self-contained)
+.\Create-Release-All# Create-Release-SelfContained.ps1 - Build and package IconChop for release (self-contained)
 # Run from the project root (same folder as IconChop.csproj).
 # Output includes .NET runtime; no runtime needed on target machine.
 # Pass -Version to override the version from csproj (used by Create-Release-All.ps1 after a bump).

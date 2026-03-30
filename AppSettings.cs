@@ -9,6 +9,7 @@ namespace IconChop
         /// <summary>One of: "Png", "Ico", "Both"</summary>
         public string OutputFormat { get; set; } = "Png";
         public string OutputPrefix { get; set; } = "icon";
+        public bool AutoNameIcons { get; set; }
         public List<string> OutputDirMru { get; set; } = [];
         public const int MruMax = 12;
 
@@ -30,6 +31,12 @@ namespace IconChop
         public string OpenAiImageSize { get; set; } = "1024x1024";
         /// <summary>For dall-e-3: standard or hd.</summary>
         public string OpenAiImageQuality { get; set; } = "standard";
+        /// <summary>Vision model used by Auto-name to describe icons.</summary>
+        public string OpenAiNamingModel { get; set; } = "gpt-4o-mini";
+
+        // OpenAI Text/Chat API overrides (fall back to image API values when blank)
+        public string? OpenAiTextApiKey { get; set; }
+        public string? OpenAiTextBaseUrl { get; set; }
 
         /// <summary>~/.icon-chop/config.json on Unix; %USERPROFILE%\icon-chop\config.json on Windows.</summary>
         public static string ConfigPath =>

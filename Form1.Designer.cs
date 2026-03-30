@@ -21,6 +21,8 @@ namespace IconChop
             menuStripMain = new MenuStrip();
             mnuFile = new ToolStripMenuItem();
             mnuLoadImage = new ToolStripMenuItem();
+            mnuFileSep1 = new ToolStripSeparator();
+            mnuSaveImages = new ToolStripMenuItem();
             mnuImage = new ToolStripMenuItem();
             mnuImageGenerate = new ToolStripMenuItem();
             mnuTools = new ToolStripMenuItem();
@@ -34,7 +36,8 @@ namespace IconChop
             lblOutputPrefix = new Label();
             txtOutputPrefix = new TextBox();
             btnBrowse = new Button();
-            btnChop = new Button();
+
+            chkAutoName = new CheckBox();
             splitMain = new SplitContainer();
             lblSource = new Label();
             panelSourceScroll = new Panel();
@@ -62,12 +65,17 @@ namespace IconChop
             menuStripMain.Text = "menuStripMain";
 
             // mnuFile
-            mnuFile.DropDownItems.AddRange(new ToolStripItem[] { mnuLoadImage });
+            mnuFile.DropDownItems.AddRange(new ToolStripItem[] { mnuLoadImage, mnuFileSep1, mnuSaveImages });
             mnuFile.Text = "&File";
 
             // mnuLoadImage
             mnuLoadImage.Text = "Load &Image...";
             mnuLoadImage.Click += BtnLoadImage_Click;
+
+            // mnuSaveImages
+            mnuSaveImages.Text = "&Save Images";
+            mnuSaveImages.ShortcutKeys = Keys.Control | Keys.S;
+            mnuSaveImages.Click += BtnChop_Click;
 
             // mnuImage
             mnuImage.DropDownItems.AddRange(new ToolStripItem[] { mnuImageGenerate });
@@ -86,7 +94,8 @@ namespace IconChop
             mnuSettings.Click += BtnSettings_Click;
 
             // panelTop
-            panelTop.Controls.Add(btnChop);
+
+            panelTop.Controls.Add(chkAutoName);
             panelTop.Controls.Add(btnBrowse);
             panelTop.Controls.Add(txtOutputPrefix);
             panelTop.Controls.Add(lblOutputPrefix);
@@ -159,19 +168,19 @@ namespace IconChop
 
             // lblOutputPrefix
             lblOutputPrefix.AutoSize = true;
-            lblOutputPrefix.Location = new Point(844, 46);
+            lblOutputPrefix.Location = new Point(844, 76);
             lblOutputPrefix.Text = "Prefix:";
             lblOutputPrefix.Font = new Font(SystemFonts.DefaultFont.FontFamily, 9F, FontStyle.Bold);
 
             // txtOutputPrefix
-            txtOutputPrefix.Location = new Point(893, 43);
+            txtOutputPrefix.Location = new Point(893, 73);
             txtOutputPrefix.Size = new Size(110, 23);
             txtOutputPrefix.MaxLength = 80;
             txtOutputPrefix.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             txtOutputPrefix.BackColor = Color.White;
 
             // btnBrowse
-            btnBrowse.Location = new Point(1013, 41);
+            btnBrowse.Location = new Point(840, 41);
             btnBrowse.Size = new Size(90, 28);
             btnBrowse.Text = "Browse...";
             btnBrowse.FlatStyle = FlatStyle.Flat;
@@ -181,18 +190,12 @@ namespace IconChop
             btnBrowse.Cursor = Cursors.Hand;
             btnBrowse.Click += BtnBrowse_Click;
 
-            // btnChop
-            btnChop.Location = new Point(1130, 65);
-            btnChop.Size = new Size(140, 35);
-            btnChop.Text = "\u2702  Chop Icons";
-            btnChop.FlatStyle = FlatStyle.Flat;
-            btnChop.BackColor = Color.FromArgb(46, 160, 67);
-            btnChop.ForeColor = Color.White;
-            btnChop.FlatAppearance.BorderSize = 0;
-            btnChop.Font = new Font(SystemFonts.DefaultFont.FontFamily, 9.5F, FontStyle.Bold);
-            btnChop.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnChop.Cursor = Cursors.Hand;
-            btnChop.Click += BtnChop_Click;
+            // chkAutoName
+            chkAutoName.AutoSize = true;
+            chkAutoName.Location = new Point(270, 76);
+            chkAutoName.Text = "Auto-name (AI)";
+            chkAutoName.ForeColor = Color.FromArgb(80, 80, 80);
+            chkAutoName.Cursor = Cursors.Hand;
 
             // splitMain
             splitMain.Dock = DockStyle.Fill;
@@ -306,6 +309,8 @@ namespace IconChop
         private MenuStrip menuStripMain;
         private ToolStripMenuItem mnuFile;
         private ToolStripMenuItem mnuLoadImage;
+        private ToolStripSeparator mnuFileSep1;
+        private ToolStripMenuItem mnuSaveImages;
         private ToolStripMenuItem mnuImage;
         private ToolStripMenuItem mnuImageGenerate;
         private ToolStripMenuItem mnuTools;
@@ -320,7 +325,8 @@ namespace IconChop
         private Label lblOutputPrefix;
         private TextBox txtOutputPrefix;
         private Button btnBrowse;
-        private Button btnChop;
+
+        private CheckBox chkAutoName;
         private SplitContainer splitMain;
         private Label lblSource;
         private Panel panelSourceScroll;
