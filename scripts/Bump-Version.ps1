@@ -1,5 +1,5 @@
 # Bump-Version.ps1 - Increment Version and AssemblyVersion in IconChop.csproj
-# Usage: .\Bump-Version.ps1 [-Bump patch|minor|major]
+# Usage: .\scripts\Bump-Version.ps1 [-Bump patch|minor|major]
 # Returns the new version string so callers can capture it.
 
 param(
@@ -8,7 +8,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$csprojPath = Join-Path $PSScriptRoot "IconChop.csproj"
+$projectDir = Split-Path $PSScriptRoot -Parent
+$csprojPath = Join-Path $projectDir "IconChop.csproj"
 
 if (-not (Test-Path $csprojPath)) {
     throw "IconChop.csproj not found at $csprojPath"

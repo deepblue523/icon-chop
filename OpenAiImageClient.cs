@@ -9,12 +9,43 @@ namespace IconChop
     internal static class OpenAiImageClient
     {
         /// <summary>
+        /// Same clause appended to Auto-name vision prompts; reused for image generation when merging user prompts.
+        /// </summary>
+        private static string AppendAutoNameAppContextClause(string precedingText, string trimmedAppContext) =>
+            precedingText + " the icons are for an application with the following description: " + trimmedAppContext;
+
+        /// <summary>
+        /// Merges a user image prompt with the main-window Auto-name application description (wording matches filename suggestions).
+        /// </summary>
+        internal static string MergeImagePromptWithAutoNameAppContext(string userPrompt, string? appContextDescription)
+        {
+            var ctx = appContextDescription?.Trim();
+            if (string.IsNullOrEmpty(ctx)) return userPrompt;
+            return AppendAutoNameAppContextClause(userPrompt.TrimEnd(), ctx);
+        }
+
+        private static string BuildSuggestFilenamesPrompt(int imageCount, string? appContextDescription)
+        {
+            var t =
+                $"You are looking at {imageCount} small icon image(s) extracted from an icon sheet. " +
+                $"For each icon (in the order shown), suggest a concise descriptive filename " +
+                $"(lowercase, words separated by hyphens, no file extension, max 25 characters). " +
+                $"Names must be unique across the set. " +
+                $"Reply with exactly {imageCount} line(s), one filename per line, nothing else.";
+            var ctx = appContextDescription?.Trim();
+            if (!string.IsNullOrEmpty(ctx))
+                t = AppendAutoNameAppContextClause(t, ctx);
+            return t;
+        }
+
+        /// <summary>
         /// Sends extracted icon images to a vision model and returns a descriptive
         /// filename prefix for each one (no extension, filesystem-safe).
         /// </summary>
         public static async Task<List<string>> SuggestFilenamesAsync(
             AppSettings settings,
             IReadOnlyList<Bitmap> images,
+            string? appContextDescription,
             CancellationToken cancellationToken)
         {
             var key = settings.OpenAiTextApiKey?.Trim() is { Length: > 0 } tk
@@ -47,12 +78,7 @@ namespace IconChop
 
                 w.WriteStartObject();
                 w.WriteString("type", "text");
-                w.WriteString("text",
-                    $"You are looking at {images.Count} small icon image(s) extracted from an icon sheet. " +
-                    $"For each icon (in the order shown), suggest a concise descriptive filename " +
-                    $"(lowercase, words separated by hyphens, no file extension, max 25 characters). " +
-                    $"Names must be unique across the set. " +
-                    $"Reply with exactly {images.Count} line(s), one filename per line, nothing else.");
+                w.WriteString("text", BuildSuggestFilenamesPrompt(images.Count, appContextDescription));
                 w.WriteEndObject();
 
                 foreach (var img in images)

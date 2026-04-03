@@ -55,14 +55,16 @@ dotnet run
 For a release package:
 
 - **Both variants + MSI (local):**  
-  `.\Create-Release-All.ps1`  
-  Produces `release\IconChop-<version>.zip`, `release\IconChop-<version>-self-contained.zip`, and `release\IconChop-<version>.msi`.
+  `.\scripts\Create-Release-All.ps1`  
+  Produces `release\IconChop-<version>.zip`, `release\IconChop-<version>-self-contained.zip`, and `release\IconChop-<version>.msi`.  
+  Add **`-UploadToGitHub`** to create or update GitHub release **`v<version>`** and attach all three files. Requires the [GitHub CLI](https://cli.github.com/) (`gh`) and `gh auth login`.
 
 - **Framework-dependent only** (needs .NET 8 on the target PC):  
-  `.\Create-Release.ps1`
+  `.\scripts\Create-Release.ps1`  
+  **`.\scripts\Create-Release.ps1 -UploadToGitHub`** runs the full release (same as `Create-Release-All.ps1 -UploadToGitHub`) and uploads all artifacts to GitHub.
 
 - **Self-contained only** (single-folder deploy, no .NET install needed):  
-  `.\Create-Release-SelfContained.ps1`
+  `.\scripts\Create-Release-SelfContained.ps1`
 
 ### GitHub releases (automated)
 

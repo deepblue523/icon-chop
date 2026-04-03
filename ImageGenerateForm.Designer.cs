@@ -19,19 +19,26 @@ namespace IconChop
             tableLayoutGenerate = new TableLayoutPanel();
             lblIntro = new Label();
             txtPrompt = new TextBox();
+            chkIncludeAutoNameDescription = new CheckBox();
             lblTemplates = new Label();
             cboTemplates = new ComboBox();
+            flowMarkupTools = new FlowLayoutPanel();
+            lblMarkupDrawHint = new Label();
+            btnMarkupColor = new Button();
+            lblMarkupUndo = new Label();
             tabRefs = new TabControl();
             tabPageRef1 = new TabPage();
-            picRef1 = new PictureBox();
+            picRef1 = new ReferenceImagePictureBox();
             flowRef1Buttons = new FlowLayoutPanel();
             btnLoad1 = new Button();
+            btnFromSource1 = new Button();
             btnPaste1 = new Button();
             btnClear1 = new Button();
             tabPageRef2 = new TabPage();
-            picRef2 = new PictureBox();
+            picRef2 = new ReferenceImagePictureBox();
             flowRef2Buttons = new FlowLayoutPanel();
             btnLoad2 = new Button();
+            btnFromSource2 = new Button();
             btnPaste2 = new Button();
             btnClear2 = new Button();
             panelGenButtons = new FlowLayoutPanel();
@@ -46,6 +53,7 @@ namespace IconChop
             btnReject = new Button();
             panelGenerate.SuspendLayout();
             tableLayoutGenerate.SuspendLayout();
+            flowMarkupTools.SuspendLayout();
             tabRefs.SuspendLayout();
             tabPageRef1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)picRef1).BeginInit();
@@ -68,9 +76,11 @@ namespace IconChop
             // tableLayoutGenerate
             tableLayoutGenerate.ColumnCount = 1;
             tableLayoutGenerate.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            tableLayoutGenerate.RowCount = 6;
+            tableLayoutGenerate.RowCount = 8;
             tableLayoutGenerate.RowStyles.Add(new RowStyle(SizeType.Absolute, 76F));
             tableLayoutGenerate.RowStyles.Add(new RowStyle(SizeType.Absolute, 84F));
+            tableLayoutGenerate.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            tableLayoutGenerate.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             tableLayoutGenerate.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             tableLayoutGenerate.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             tableLayoutGenerate.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
@@ -78,10 +88,12 @@ namespace IconChop
             tableLayoutGenerate.Dock = DockStyle.Fill;
             tableLayoutGenerate.Controls.Add(lblIntro, 0, 0);
             tableLayoutGenerate.Controls.Add(txtPrompt, 0, 1);
-            tableLayoutGenerate.Controls.Add(lblTemplates, 0, 2);
-            tableLayoutGenerate.Controls.Add(cboTemplates, 0, 3);
-            tableLayoutGenerate.Controls.Add(tabRefs, 0, 4);
-            tableLayoutGenerate.Controls.Add(panelGenButtons, 0, 5);
+            tableLayoutGenerate.Controls.Add(chkIncludeAutoNameDescription, 0, 2);
+            tableLayoutGenerate.Controls.Add(lblTemplates, 0, 3);
+            tableLayoutGenerate.Controls.Add(cboTemplates, 0, 4);
+            tableLayoutGenerate.Controls.Add(flowMarkupTools, 0, 5);
+            tableLayoutGenerate.Controls.Add(tabRefs, 0, 6);
+            tableLayoutGenerate.Controls.Add(panelGenButtons, 0, 7);
 
             // lblIntro
             lblIntro.AutoSize = false;
@@ -90,6 +102,7 @@ namespace IconChop
             lblIntro.Text =
                 "This feature generates a new image using OpenAI from your prompt below. " +
                 "Optional reference images (tabs) are sent to the model when present. " +
+                "Drag on a loaded reference image to draw highlight rectangles. " +
                 "Configure your API key and model under Tools → Settings.";
             lblIntro.ForeColor = Color.FromArgb(80, 80, 80);
             lblIntro.TextAlign = ContentAlignment.TopLeft;
@@ -101,6 +114,15 @@ namespace IconChop
             txtPrompt.ScrollBars = ScrollBars.Vertical;
             txtPrompt.TabIndex = 1;
 
+            // chkIncludeAutoNameDescription
+            chkIncludeAutoNameDescription.AutoSize = true;
+            chkIncludeAutoNameDescription.Dock = DockStyle.Top;
+            chkIncludeAutoNameDescription.Margin = new Padding(0, 0, 0, 8);
+            chkIncludeAutoNameDescription.Text = "Automatically include the Auto-name description in the prompt";
+            chkIncludeAutoNameDescription.ForeColor = Color.FromArgb(80, 80, 80);
+            chkIncludeAutoNameDescription.Cursor = Cursors.Hand;
+            chkIncludeAutoNameDescription.TabIndex = 2;
+
             // lblTemplates
             lblTemplates.AutoSize = true;
             lblTemplates.Dock = DockStyle.Top;
@@ -109,16 +131,42 @@ namespace IconChop
 
             // cboTemplates
             cboTemplates.Dock = DockStyle.Fill;
-            cboTemplates.DrawMode = DrawMode.OwnerDrawVariable;
+            cboTemplates.DropDownHeight = 480;
             cboTemplates.DropDownStyle = ComboBoxStyle.DropDownList;
-            cboTemplates.IntegralHeight = false;
             cboTemplates.Margin = new Padding(0, 0, 0, 8);
-            cboTemplates.TabIndex = 2;
+            cboTemplates.TabIndex = 3;
+
+            // flowMarkupTools
+            flowMarkupTools.AutoSize = true;
+            flowMarkupTools.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            flowMarkupTools.Dock = DockStyle.Fill;
+            flowMarkupTools.Margin = new Padding(0, 0, 0, 8);
+            flowMarkupTools.WrapContents = false;
+            flowMarkupTools.Controls.Add(lblMarkupDrawHint);
+            flowMarkupTools.Controls.Add(btnMarkupColor);
+            flowMarkupTools.Controls.Add(lblMarkupUndo);
+
+            lblMarkupDrawHint.AutoSize = true;
+            lblMarkupDrawHint.Margin = new Padding(0, 6, 12, 6);
+            lblMarkupDrawHint.Text = "Markup color:";
+            lblMarkupDrawHint.ForeColor = Color.FromArgb(80, 80, 80);
+
+            btnMarkupColor.FlatStyle = FlatStyle.Flat;
+            btnMarkupColor.Size = new Size(44, 24);
+            btnMarkupColor.Margin = new Padding(0, 4, 16, 4);
+            btnMarkupColor.Cursor = Cursors.Hand;
+            btnMarkupColor.TabIndex = 4;
+            btnMarkupColor.UseVisualStyleBackColor = false;
+
+            lblMarkupUndo.AutoSize = true;
+            lblMarkupUndo.Margin = new Padding(0, 6, 0, 6);
+            lblMarkupUndo.Text = "Ctrl+Z: undo last rectangle on the selected image tab";
+            lblMarkupUndo.ForeColor = Color.FromArgb(80, 80, 80);
 
             // tabRefs
             tabRefs.Dock = DockStyle.Fill;
             tabRefs.Margin = new Padding(0);
-            tabRefs.TabIndex = 3;
+            tabRefs.TabIndex = 5;
             tabRefs.Controls.Add(tabPageRef1);
             tabRefs.Controls.Add(tabPageRef2);
 
@@ -134,6 +182,7 @@ namespace IconChop
             picRef1.BorderStyle = BorderStyle.FixedSingle;
             picRef1.SizeMode = PictureBoxSizeMode.Zoom;
             picRef1.TabStop = false;
+            picRef1.Cursor = Cursors.Cross;
 
             // flowRef1Buttons
             flowRef1Buttons.Dock = DockStyle.Bottom;
@@ -141,6 +190,7 @@ namespace IconChop
             flowRef1Buttons.Padding = new Padding(0, 8, 0, 0);
             flowRef1Buttons.WrapContents = false;
             flowRef1Buttons.Controls.Add(btnLoad1);
+            flowRef1Buttons.Controls.Add(btnFromSource1);
             flowRef1Buttons.Controls.Add(btnPaste1);
             flowRef1Buttons.Controls.Add(btnClear1);
 
@@ -148,6 +198,11 @@ namespace IconChop
             btnLoad1.AutoSize = true;
             btnLoad1.FlatStyle = FlatStyle.Flat;
             btnLoad1.Margin = new Padding(0, 0, 8, 0);
+
+            btnFromSource1.Text = "From Source Image";
+            btnFromSource1.AutoSize = true;
+            btnFromSource1.FlatStyle = FlatStyle.Flat;
+            btnFromSource1.Margin = new Padding(0, 0, 8, 0);
 
             btnPaste1.Text = "Paste";
             btnPaste1.AutoSize = true;
@@ -157,6 +212,7 @@ namespace IconChop
             btnClear1.Text = "Clear";
             btnClear1.AutoSize = true;
             btnClear1.FlatStyle = FlatStyle.Flat;
+            btnClear1.Margin = new Padding(0);
 
             // tabPageRef2
             tabPageRef2.Text = "Image 2";
@@ -175,6 +231,7 @@ namespace IconChop
             flowRef2Buttons.Padding = new Padding(0, 8, 0, 0);
             flowRef2Buttons.WrapContents = false;
             flowRef2Buttons.Controls.Add(btnLoad2);
+            flowRef2Buttons.Controls.Add(btnFromSource2);
             flowRef2Buttons.Controls.Add(btnPaste2);
             flowRef2Buttons.Controls.Add(btnClear2);
 
@@ -182,6 +239,11 @@ namespace IconChop
             btnLoad2.AutoSize = true;
             btnLoad2.FlatStyle = FlatStyle.Flat;
             btnLoad2.Margin = new Padding(0, 0, 8, 0);
+
+            btnFromSource2.Text = "From Source Image";
+            btnFromSource2.AutoSize = true;
+            btnFromSource2.FlatStyle = FlatStyle.Flat;
+            btnFromSource2.Margin = new Padding(0, 0, 8, 0);
 
             btnPaste2.Text = "Paste";
             btnPaste2.AutoSize = true;
@@ -191,6 +253,7 @@ namespace IconChop
             btnClear2.Text = "Clear";
             btnClear2.AutoSize = true;
             btnClear2.FlatStyle = FlatStyle.Flat;
+            btnClear2.Margin = new Padding(0);
 
             // panelGenButtons
             panelGenButtons.Dock = DockStyle.Fill;
@@ -201,19 +264,26 @@ namespace IconChop
             panelGenButtons.Controls.Add(btnGenerate);
 
             btnGenerate.Text = "Generate";
+            btnGenerate.AutoSize = false;
             btnGenerate.Size = new Size(120, 30);
             btnGenerate.FlatStyle = FlatStyle.Flat;
             btnGenerate.BackColor = Color.FromArgb(46, 160, 67);
             btnGenerate.ForeColor = Color.White;
+            btnGenerate.UseVisualStyleBackColor = false;
             btnGenerate.FlatAppearance.BorderSize = 0;
             btnGenerate.Margin = new Padding(12, 0, 0, 0);
-            btnGenerate.TabIndex = 10;
+            btnGenerate.TabIndex = 20;
 
             btnCancel.Text = "Close";
+            btnCancel.AutoSize = false;
             btnCancel.Size = new Size(90, 30);
             btnCancel.FlatStyle = FlatStyle.Flat;
             btnCancel.DialogResult = DialogResult.Cancel;
-            btnCancel.TabIndex = 11;
+            btnCancel.UseVisualStyleBackColor = false;
+            btnCancel.FlatAppearance.BorderSize = 1;
+            btnCancel.FlatAppearance.BorderColor = Color.FromArgb(180, 180, 180);
+            btnCancel.Margin = new Padding(0);
+            btnCancel.TabIndex = 21;
 
             // panelPreview
             panelPreview.Controls.Add(tableLayoutPreview);
@@ -278,7 +348,10 @@ namespace IconChop
             StartPosition = FormStartPosition.CenterParent;
             Text = "Generate image";
             CancelButton = btnCancel;
+            KeyPreview = true;
 
+            flowMarkupTools.ResumeLayout(false);
+            flowMarkupTools.PerformLayout();
             tabPageRef1.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)picRef1).EndInit();
             flowRef1Buttons.ResumeLayout(false);
@@ -304,19 +377,26 @@ namespace IconChop
         private TableLayoutPanel tableLayoutGenerate;
         private Label lblIntro;
         private TextBox txtPrompt;
+        private CheckBox chkIncludeAutoNameDescription;
         private Label lblTemplates;
         private ComboBox cboTemplates;
+        private FlowLayoutPanel flowMarkupTools;
+        private Label lblMarkupDrawHint;
+        private Button btnMarkupColor;
+        private Label lblMarkupUndo;
         private TabControl tabRefs;
         private TabPage tabPageRef1;
-        private PictureBox picRef1;
+        private ReferenceImagePictureBox picRef1;
         private FlowLayoutPanel flowRef1Buttons;
         private Button btnLoad1;
+        private Button btnFromSource1;
         private Button btnPaste1;
         private Button btnClear1;
         private TabPage tabPageRef2;
-        private PictureBox picRef2;
+        private ReferenceImagePictureBox picRef2;
         private FlowLayoutPanel flowRef2Buttons;
         private Button btnLoad2;
+        private Button btnFromSource2;
         private Button btnPaste2;
         private Button btnClear2;
         private FlowLayoutPanel panelGenButtons;

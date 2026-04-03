@@ -38,8 +38,14 @@ namespace IconChop
             btnBrowse = new Button();
 
             chkAutoName = new CheckBox();
+            cboNamingAppContext = new ComboBox();
             splitMain = new SplitContainer();
+            panelSourceHeader = new Panel();
             lblSource = new Label();
+            btnSourcePaste = new Button();
+            btnSourceGenerate = new Button();
+            btnSourceHistory = new Button();
+            btnSourceVary = new Button();
             panelSourceScroll = new Panel();
             picSource = new PictureBox();
             lblPreviewCount = new Label();
@@ -96,6 +102,7 @@ namespace IconChop
             // panelTop
 
             panelTop.Controls.Add(chkAutoName);
+            panelTop.Controls.Add(cboNamingAppContext);
             panelTop.Controls.Add(btnBrowse);
             panelTop.Controls.Add(txtOutputPrefix);
             panelTop.Controls.Add(lblOutputPrefix);
@@ -181,8 +188,12 @@ namespace IconChop
 
             // btnBrowse
             btnBrowse.Location = new Point(840, 41);
-            btnBrowse.Size = new Size(90, 28);
+            btnBrowse.Size = new Size(122, 30);
             btnBrowse.Text = "Browse...";
+            btnBrowse.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnBrowse.ImageAlign = ContentAlignment.MiddleCenter;
+            btnBrowse.TextAlign = ContentAlignment.MiddleCenter;
+            btnBrowse.Padding = new Padding(4, 0, 4, 0);
             btnBrowse.FlatStyle = FlatStyle.Flat;
             btnBrowse.BackColor = Color.FromArgb(230, 230, 230);
             btnBrowse.FlatAppearance.BorderColor = Color.FromArgb(180, 180, 180);
@@ -197,6 +208,15 @@ namespace IconChop
             chkAutoName.ForeColor = Color.FromArgb(80, 80, 80);
             chkAutoName.Cursor = Cursors.Hand;
 
+            // cboNamingAppContext — optional app description for Auto-name (MRU combo)
+            cboNamingAppContext.DropDownStyle = ComboBoxStyle.DropDown;
+            cboNamingAppContext.Location = new Point(395, 73);
+            cboNamingAppContext.Size = new Size(240, 23);
+            cboNamingAppContext.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            cboNamingAppContext.MaxDropDownItems = 11;
+            cboNamingAppContext.MaxLength = 280;
+            cboNamingAppContext.BackColor = Color.White;
+
             // splitMain
             splitMain.Dock = DockStyle.Fill;
             splitMain.Orientation = Orientation.Vertical;
@@ -206,16 +226,96 @@ namespace IconChop
 
             // splitMain.Panel1 — Source image
             splitMain.Panel1.Controls.Add(panelSourceScroll);
-            splitMain.Panel1.Controls.Add(lblSource);
+            splitMain.Panel1.Controls.Add(panelSourceHeader);
+
+            // panelSourceHeader
+            panelSourceHeader.Dock = DockStyle.Top;
+            panelSourceHeader.Height = 52;
+            panelSourceHeader.BackColor = Color.FromArgb(230, 230, 230);
+            panelSourceHeader.Controls.Add(lblSource);
+            panelSourceHeader.Controls.Add(btnSourcePaste);
+            panelSourceHeader.Controls.Add(btnSourceHistory);
+            panelSourceHeader.Controls.Add(btnSourceGenerate);
+            panelSourceHeader.Controls.Add(btnSourceVary);
 
             // lblSource
-            lblSource.Dock = DockStyle.Top;
+            lblSource.Dock = DockStyle.Fill;
             lblSource.Text = "  Source Image";
-            lblSource.Height = 26;
             lblSource.TextAlign = ContentAlignment.MiddleLeft;
             lblSource.Font = new Font(SystemFonts.DefaultFont.FontFamily, 8.5F, FontStyle.Bold);
             lblSource.ForeColor = Color.FromArgb(60, 60, 60);
             lblSource.BackColor = Color.FromArgb(230, 230, 230);
+
+            // btnSourcePaste
+            btnSourcePaste.Dock = DockStyle.Right;
+            btnSourcePaste.Width = 118;
+            btnSourcePaste.Text = "Paste";
+            btnSourcePaste.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnSourcePaste.ImageAlign = ContentAlignment.MiddleLeft;
+            btnSourcePaste.TextAlign = ContentAlignment.MiddleCenter;
+            btnSourcePaste.Padding = new Padding(8, 0, 4, 0);
+            btnSourcePaste.FlatStyle = FlatStyle.Flat;
+            btnSourcePaste.BackColor = Color.FromArgb(240, 240, 240);
+            btnSourcePaste.FlatAppearance.BorderColor = Color.FromArgb(180, 180, 180);
+            btnSourcePaste.Cursor = Cursors.Hand;
+            btnSourcePaste.TabStop = true;
+            btnSourcePaste.Font = new Font(SystemFonts.DefaultFont.FontFamily, 8.5F, FontStyle.Bold);
+            btnSourcePaste.ForeColor = Color.FromArgb(60, 60, 60);
+            btnSourcePaste.Margin = new Padding(0, 0, 6, 0);
+            btnSourcePaste.Click += BtnSourcePaste_Click;
+
+            // btnSourceGenerate
+            btnSourceGenerate.Dock = DockStyle.Right;
+            btnSourceGenerate.Width = 118;
+            btnSourceGenerate.Text = "Generate";
+            btnSourceGenerate.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnSourceGenerate.ImageAlign = ContentAlignment.MiddleLeft;
+            btnSourceGenerate.TextAlign = ContentAlignment.MiddleCenter;
+            btnSourceGenerate.Padding = new Padding(8, 0, 4, 0);
+            btnSourceGenerate.FlatStyle = FlatStyle.Flat;
+            btnSourceGenerate.BackColor = Color.FromArgb(240, 240, 240);
+            btnSourceGenerate.FlatAppearance.BorderColor = Color.FromArgb(180, 180, 180);
+            btnSourceGenerate.Cursor = Cursors.Hand;
+            btnSourceGenerate.TabStop = true;
+            btnSourceGenerate.Font = new Font(SystemFonts.DefaultFont.FontFamily, 8.5F, FontStyle.Bold);
+            btnSourceGenerate.ForeColor = Color.FromArgb(60, 60, 60);
+            btnSourceGenerate.Margin = new Padding(0, 0, 6, 0);
+            btnSourceGenerate.Click += BtnSourceGenerate_Click;
+
+            // btnSourceVary
+            btnSourceVary.Dock = DockStyle.Right;
+            btnSourceVary.Width = 118;
+            btnSourceVary.Text = "Vary";
+            btnSourceVary.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnSourceVary.ImageAlign = ContentAlignment.MiddleLeft;
+            btnSourceVary.TextAlign = ContentAlignment.MiddleCenter;
+            btnSourceVary.Padding = new Padding(8, 0, 4, 0);
+            btnSourceVary.FlatStyle = FlatStyle.Flat;
+            btnSourceVary.BackColor = Color.FromArgb(240, 240, 240);
+            btnSourceVary.FlatAppearance.BorderColor = Color.FromArgb(180, 180, 180);
+            btnSourceVary.Cursor = Cursors.Hand;
+            btnSourceVary.TabStop = true;
+            btnSourceVary.Font = new Font(SystemFonts.DefaultFont.FontFamily, 8.5F, FontStyle.Bold);
+            btnSourceVary.ForeColor = Color.FromArgb(60, 60, 60);
+            btnSourceVary.Margin = new Padding(0, 0, 6, 0);
+            btnSourceVary.Click += BtnSourceVary_Click;
+
+            // btnSourceHistory
+            btnSourceHistory.Dock = DockStyle.Right;
+            btnSourceHistory.Width = 118;
+            btnSourceHistory.Text = "History \u25bc";
+            btnSourceHistory.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnSourceHistory.ImageAlign = ContentAlignment.MiddleLeft;
+            btnSourceHistory.TextAlign = ContentAlignment.MiddleCenter;
+            btnSourceHistory.Padding = new Padding(8, 0, 4, 0);
+            btnSourceHistory.FlatStyle = FlatStyle.Flat;
+            btnSourceHistory.BackColor = Color.FromArgb(240, 240, 240);
+            btnSourceHistory.FlatAppearance.BorderColor = Color.FromArgb(180, 180, 180);
+            btnSourceHistory.Cursor = Cursors.Hand;
+            btnSourceHistory.TabStop = true;
+            btnSourceHistory.Font = new Font(SystemFonts.DefaultFont.FontFamily, 8.5F, FontStyle.Bold);
+            btnSourceHistory.ForeColor = Color.FromArgb(60, 60, 60);
+            btnSourceHistory.Click += BtnSourceHistory_Click;
 
             // panelSourceScroll
             panelSourceScroll.Dock = DockStyle.Fill;
@@ -327,8 +427,14 @@ namespace IconChop
         private Button btnBrowse;
 
         private CheckBox chkAutoName;
+        private ComboBox cboNamingAppContext;
         private SplitContainer splitMain;
+        private Panel panelSourceHeader;
         private Label lblSource;
+        private Button btnSourcePaste;
+        private Button btnSourceGenerate;
+        private Button btnSourceHistory;
+        private Button btnSourceVary;
         private Panel panelSourceScroll;
         private PictureBox picSource;
         private Label lblPreviewCount;

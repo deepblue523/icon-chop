@@ -127,5 +127,5 @@ _Chutzpah*
 *.swp
 *~
 
-# Release output (run Create-Release.ps1 to generate)
+# Release output (run scripts/Create-Release.ps1 to generate)
 release/

@@ -1,22 +1,33 @@
 # Create-Release.ps1 - Build and package IconChop for release (framework-dependent)
-# Run from the project root (same folder as IconChop.csproj).
+# Repo root is the parent of this scripts folder (contains IconChop.csproj).
 # Requires .NET 8 runtime on target machine. For a self-contained build, use Create-Release-SelfContained.ps1.
 # Pass -Version to override the version from csproj (used by Create-Release-All.ps1 after a bump).
+# Use -UploadToGitHub to build all artifacts (framework zip, self-contained zip, MSI) and publish to GitHub (see Create-Release-All.ps1).
 
 param(
-    [string]$Version
+    [string]$Version,
+
+    [switch]$UploadToGitHub
 )
 
 $ErrorActionPreference = "Stop"
-$projectDir = $PSScriptRoot
+
+if ($UploadToGitHub) {
+    $allScript = Join-Path $PSScriptRoot "Create-Release-All.ps1"
+    $splat = @{ UploadToGitHub = $true }
+    if ($PSBoundParameters.ContainsKey("Version")) { $splat.Version = $Version }
+    & $allScript @splat
+    exit $LASTEXITCODE
+}
+$projectDir = Split-Path $PSScriptRoot -Parent
 $releaseDir = Join-Path $projectDir "release"
 $publishDir = Join-Path $projectDir "publish"
+$csprojPath = Join-Path $projectDir "IconChop.csproj"
 
 # Use provided version or read from csproj (fallback to 1.0.0)
 if ($Version) {
     $version = $Version
 } else {
-    $csprojPath = Join-Path $projectDir "IconChop.csproj"
     $version = "1.0.0"
     if (Test-Path $csprojPath) {
         $content = Get-Content $csprojPath -Raw
@@ -35,7 +46,7 @@ Write-Host ""
 # Clean and publish (framework-dependent; requires .NET 8 runtime on target machine)
 Write-Host "Publishing (Release)..." -ForegroundColor Yellow
 if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
-dotnet publish IconChop.csproj -c Release -o $publishDir
+dotnet publish $csprojPath -c Release -o $publishDir
 
 if (-not (Test-Path $publishDir)) {
     Write-Error "Publish failed: output folder not found."
