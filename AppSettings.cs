@@ -3,6 +3,9 @@ namespace IconChop
     public class AppSettings
     {
         public string? LastInputPath { get; set; }
+        /// <summary>Recently opened source image files (newest first), max <see cref="InputImageMruMax"/>.</summary>
+        public List<string> InputImageMru { get; set; } = [];
+        public const int InputImageMruMax = 10;
         public bool AutoReloadInput { get; set; } = true;
         public HashSet<int> CheckedSizes { get; set; } = [32, 48, 64];
         public string? LastOutputDir { get; set; }
@@ -10,12 +13,19 @@ namespace IconChop
         public string OutputFormat { get; set; } = "Png";
         public string OutputPrefix { get; set; } = "icon";
         public bool AutoNameIcons { get; set; }
+        /// <summary>Last app/context text for Auto-name (empty = none).</summary>
+        public string? LastAutoNameAppContext { get; set; }
+        /// <summary>Recent app descriptions for Auto-name (newest first), max <see cref="AutoNameAppContextMruMax"/>.</summary>
+        public List<string> AutoNameAppContextMru { get; set; } = [];
+        public const int AutoNameAppContextMruMax = 10;
         public List<string> OutputDirMru { get; set; } = [];
         public const int MruMax = 12;
 
         /// <summary>Last-used image-generation prompts (newest first).</summary>
         public List<string> PromptMru { get; set; } = [];
         public const int PromptMruMax = 10;
+        /// <summary>Image → Generate: append Auto-name app description to the API prompt when checked.</summary>
+        public bool IncludeAutoNameContextInImagePrompt { get; set; }
 
         public int? FormX { get; set; }
         public int? FormY { get; set; }
@@ -45,6 +55,13 @@ namespace IconChop
                 "icon-chop",
                 "config.json");
 
+        /// <summary>Subfolder of the config directory for temporary files (e.g. generated source images).</summary>
+        public static string TempDirectoryPath =>
+            Path.Combine(
+                Path.GetDirectoryName(ConfigPath)
+                ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "icon-chop"),
+                "tmp");
+
         /// <summary>Previous location; read once for migration if <see cref="ConfigPath"/> is missing.</summary>
         public static string LegacySettingsPath =>
             Path.Combine(
@@ -65,7 +82,9 @@ namespace IconChop
                 {
                     var json = File.ReadAllText(ConfigPath);
                     var settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
-                    return settings ?? new AppSettings();
+                    var loaded = settings ?? new AppSettings();
+                    loaded.InputImageMru ??= [];
+                    return loaded;
                 }
 
                 if (File.Exists(LegacySettingsPath))
@@ -73,6 +92,7 @@ namespace IconChop
                     var json = File.ReadAllText(LegacySettingsPath);
                     var settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
                     var result = settings ?? new AppSettings();
+                    result.InputImageMru ??= [];
                     try
                     {
                         result.Save();

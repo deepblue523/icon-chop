@@ -4,11 +4,34 @@ namespace IconChop
 {
     public partial class ImageGenerateForm : Form
     {
-        private readonly AppSettings _settings;
+        private const string MarkupPromptSuffix =
+            "See markup on the image for additional context and highlighted areas.";
 
+        private const float MarkupPenWidthPx = 4f;
+
+        private readonly AppSettings _settings;
+        private readonly Func<string?>? _getAutoNameAppContextForApi;
+        private readonly Func<Bitmap?>? _getMainSourceImage;
+
+        private Bitmap? _refBase1;
+        private Bitmap? _refBase2;
         private Bitmap? _refBitmap1;
         private Bitmap? _refBitmap2;
+        private readonly List<MarkupStroke> _markup1 = [];
+        private readonly List<MarkupStroke> _markup2 = [];
+        private Color _markupDrawColor = Color.FromArgb(220, 60, 60);
+        private int _dragSlot;
+        private bool _dragActive;
+        private Point _dragStartImg;
+        private Point _dragCurrentImg;
         private Bitmap? _previewBitmap;
+        private bool _applyingIncludeAutoNameCheckFromSettings;
+
+        private readonly struct MarkupStroke(Rectangle bounds, Color color)
+        {
+            public Rectangle Bounds { get; } = bounds;
+            public Color Color { get; } = color;
+        }
 
         private static readonly string[] CannedPrompts =
         [
@@ -17,56 +40,88 @@ namespace IconChop
             "Create missing icons using style of the ones in Image 1 and items in Image 2. Generate images only, no text.",
         ];
 
-        private sealed class TemplateComboItem
-        {
-            public static readonly TemplateComboItem Separator = new() { IsSeparator = true };
-
-            public bool IsSeparator { get; private init; }
-            public string DisplayText { get; private init; } = "";
-            public string? Prompt { get; private init; }
-
-            public static TemplateComboItem Header(string display) =>
-                new() { DisplayText = display, Prompt = null };
-
-            public static TemplateComboItem PromptLine(string text) =>
-                new() { DisplayText = text, Prompt = text };
-
-            public override string ToString() => DisplayText;
-        }
+        /// <summary>List divider between canned templates and MRU (not applied as a prompt).</summary>
+        private const string TemplatesMruSeparator = "──────────────";
 
         /// <summary>Set when the user accepts a preview; caller disposes after applying.</summary>
         public Bitmap? AcceptedImage { get; private set; }
 
-        public ImageGenerateForm(AppSettings settings)
+        public ImageGenerateForm(
+            AppSettings settings,
+            Func<string?>? getAutoNameAppContextForApi = null,
+            Bitmap? initialReference1FromSource = null,
+            Func<Bitmap?>? getMainSourceImage = null)
         {
             _settings = settings;
+            _getAutoNameAppContextForApi = getAutoNameAppContextForApi;
+            _getMainSourceImage = getMainSourceImage;
             InitializeComponent();
+            if (initialReference1FromSource != null)
+            {
+                SetRef(1, new Bitmap(initialReference1FromSource));
+                tabRefs.SelectedIndex = 0;
+            }
+
+            if (_getMainSourceImage == null)
+            {
+                btnFromSource1.Visible = false;
+                btnFromSource2.Visible = false;
+            }
+
             Load += ImageGenerateForm_Load;
             FormClosing += ImageGenerateForm_FormClosing;
             cboTemplates.SelectedIndexChanged += CboTemplates_SelectedIndexChanged;
-            cboTemplates.MeasureItem += CboTemplates_MeasureItem;
-            cboTemplates.DrawItem += CboTemplates_DrawItem;
             btnGenerate.Click += BtnGenerate_Click;
             btnCancel.Click += (_, _) => Close();
             btnAccept.Click += BtnAccept_Click;
             btnReject.Click += BtnReject_Click;
             btnLoad1.Click += (_, _) => LoadRefFromFile(1);
+            btnFromSource1.Click += (_, _) => LoadRefFromMainSource(1);
             btnPaste1.Click += (_, _) => PasteRef(1);
             btnClear1.Click += (_, _) => ClearRef(1);
             btnLoad2.Click += (_, _) => LoadRefFromFile(2);
+            btnFromSource2.Click += (_, _) => LoadRefFromMainSource(2);
             btnPaste2.Click += (_, _) => PasteRef(2);
             btnClear2.Click += (_, _) => ClearRef(2);
+            chkIncludeAutoNameDescription.CheckedChanged += ChkIncludeAutoNameDescription_CheckedChanged;
+            btnMarkupColor.Click += BtnMarkupColor_Click;
+            picRef1.MouseDown += PicRef_MouseDown;
+            picRef1.MouseMove += PicRef_MouseMove;
+            picRef1.MouseUp += PicRef_MouseUp;
+            picRef1.PaintOverlay = g => PaintMarkupDragOverlay(g, picRef1, 1);
+            picRef2.MouseDown += PicRef_MouseDown;
+            picRef2.MouseMove += PicRef_MouseMove;
+            picRef2.MouseUp += PicRef_MouseUp;
+            picRef2.PaintOverlay = g => PaintMarkupDragOverlay(g, picRef2, 2);
+            SyncMarkupColorButton();
         }
 
         private void ImageGenerateForm_Load(object? sender, EventArgs e)
         {
+            _applyingIncludeAutoNameCheckFromSettings = true;
+            try
+            {
+                chkIncludeAutoNameDescription.Checked = _settings.IncludeAutoNameContextInImagePrompt;
+            }
+            finally
+            {
+                _applyingIncludeAutoNameCheckFromSettings = false;
+            }
+
             RebuildTemplateCombo();
+        }
+
+        private void ChkIncludeAutoNameDescription_CheckedChanged(object? sender, EventArgs e)
+        {
+            if (_applyingIncludeAutoNameCheckFromSettings) return;
+            _settings.IncludeAutoNameContextInImagePrompt = chkIncludeAutoNameDescription.Checked;
+            _settings.Save();
         }
 
         private void ImageGenerateForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
-            DisposeRef(ref _refBitmap1, picRef1);
-            DisposeRef(ref _refBitmap2, picRef2);
+            DisposeRefSlot(1);
+            DisposeRefSlot(2);
             _previewBitmap?.Dispose();
             _previewBitmap = null;
         }
@@ -77,22 +132,22 @@ namespace IconChop
             try
             {
                 cboTemplates.Items.Clear();
-                cboTemplates.Items.Add(TemplateComboItem.Header("(Choose template or recent…)"));
+                cboTemplates.Items.Add("(Choose template or recent…)");
                 foreach (var p in CannedPrompts)
-                    cboTemplates.Items.Add(TemplateComboItem.PromptLine(p));
+                    cboTemplates.Items.Add(p);
 
                 var mruToShow = _settings.PromptMru
                     .Where(p => !CannedPrompts.Any(c => string.Equals(c, p, StringComparison.OrdinalIgnoreCase)))
+                    .Where(p => !string.Equals(p, TemplatesMruSeparator, StringComparison.Ordinal))
                     .ToList();
                 if (mruToShow.Count > 0)
                 {
-                    cboTemplates.Items.Add(TemplateComboItem.Separator);
+                    cboTemplates.Items.Add(TemplatesMruSeparator);
                     foreach (var p in mruToShow)
-                        cboTemplates.Items.Add(TemplateComboItem.PromptLine(p));
+                        cboTemplates.Items.Add(p);
                 }
 
                 cboTemplates.SelectedIndex = 0;
-                UpdateTemplateDropDownWidth();
             }
             finally
             {
@@ -100,77 +155,11 @@ namespace IconChop
             }
         }
 
-        private void UpdateTemplateDropDownWidth()
-        {
-            var font = cboTemplates.Font;
-            var pad = 24;
-            var measureW = Math.Max(cboTemplates.Width - pad, 320);
-            var max = cboTemplates.Width;
-            foreach (var obj in cboTemplates.Items)
-            {
-                if (obj is not TemplateComboItem item || item.IsSeparator) continue;
-                var sz = TextRenderer.MeasureText(item.DisplayText, font,
-                    new Size(measureW, int.MaxValue),
-                    TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl);
-                max = Math.Max(max, sz.Width + pad);
-            }
-
-            cboTemplates.DropDownWidth = Math.Min(max, 1200);
-        }
-
-        private void CboTemplates_MeasureItem(object? sender, MeasureItemEventArgs e)
-        {
-            if (e.Index < 0 || e.Index >= cboTemplates.Items.Count) return;
-            if (cboTemplates.Items[e.Index] is not TemplateComboItem item) return;
-
-            if (item.IsSeparator)
-            {
-                e.ItemHeight = 9;
-                return;
-            }
-
-            // TextRenderer.MeasureText(..., int.MaxValue height) + TextBoxControl often returns
-            // wildly inflated heights for combo rows; MeasureString with a wrap width matches DrawText.
-            var wrapWidth = Math.Max(cboTemplates.DropDownWidth - 16, Math.Max(cboTemplates.ClientSize.Width - 8, 200));
-            using var g = cboTemplates.CreateGraphics();
-            // GenericTypographic is a shared StringFormat; do not dispose.
-            var sizeF = g.MeasureString(item.DisplayText, cboTemplates.Font, wrapWidth, StringFormat.GenericTypographic);
-            var lineH = (int)Math.Ceiling(cboTemplates.Font.GetHeight());
-            var h = (int)Math.Ceiling(sizeF.Height) + 6;
-            e.ItemHeight = Math.Max(h, lineH + 4);
-        }
-
-        private void CboTemplates_DrawItem(object? sender, DrawItemEventArgs e)
-        {
-            if (e.Index < 0 || e.Index >= cboTemplates.Items.Count) return;
-            if (cboTemplates.Items[e.Index] is not TemplateComboItem item) return;
-
-            if (item.IsSeparator)
-            {
-                e.DrawBackground();
-                var y = e.Bounds.Top + e.Bounds.Height / 2;
-                using var pen = new Pen(SystemColors.ControlDark, 1f) { DashStyle = DashStyle.Solid };
-                e.Graphics.DrawLine(pen, e.Bounds.Left + 6, y, e.Bounds.Right - 6, y);
-                return;
-            }
-
-            var selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-            var back = selected ? SystemColors.Highlight : SystemColors.Window;
-            var fore = selected ? SystemColors.HighlightText : SystemColors.WindowText;
-            using var backBrush = new SolidBrush(back);
-            e.Graphics.FillRectangle(backBrush, e.Bounds);
-            var textRect = new Rectangle(e.Bounds.Left + 4, e.Bounds.Top + 3, e.Bounds.Width - 8, e.Bounds.Height - 6);
-            TextRenderer.DrawText(e.Graphics, item.DisplayText, e.Font, textRect, fore,
-                TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.WordBreak | TextFormatFlags.NoPadding);
-            if ((e.State & DrawItemState.Focus) == DrawItemState.Focus && !selected)
-                e.DrawFocusRectangle();
-        }
-
         private void CboTemplates_SelectedIndexChanged(object? sender, EventArgs e)
         {
-            if (cboTemplates.SelectedItem is not TemplateComboItem item) return;
+            if (cboTemplates.SelectedItem is not string s) return;
 
-            if (item.IsSeparator)
+            if (s == TemplatesMruSeparator)
             {
                 cboTemplates.SelectedIndexChanged -= CboTemplates_SelectedIndexChanged;
                 try
@@ -185,8 +174,8 @@ namespace IconChop
                 return;
             }
 
-            if (item.Prompt != null)
-                txtPrompt.Text = item.Prompt;
+            if (cboTemplates.SelectedIndex <= 0) return;
+            txtPrompt.Text = s;
         }
 
         private void LoadRefFromFile(int slot)
@@ -206,6 +195,43 @@ namespace IconChop
             catch (Exception ex)
             {
                 MessageBox.Show($"Could not load image:\n{ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void LoadRefFromMainSource(int slot)
+        {
+            if (_getMainSourceImage == null) return;
+
+            Bitmap? src;
+            try
+            {
+                src = _getMainSourceImage();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not read the main source image:\n{ex.Message}", "From Source Image",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            if (src == null)
+            {
+                MessageBox.Show(
+                    "There is no source image on the main window. Load or paste an image there first.",
+                    "From Source Image",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            try
+            {
+                SetRef(slot, new Bitmap(src));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not copy the source image:\n{ex.Message}", "From Source Image",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -233,39 +259,291 @@ namespace IconChop
             }
         }
 
-        private void ClearRef(int slot)
+        private void ClearRef(int slot) => DisposeRefSlot(slot);
+
+        private void DisposeRefSlot(int slot)
         {
             if (slot == 1)
-                DisposeRef(ref _refBitmap1, picRef1);
+            {
+                _markup1.Clear();
+                _refBitmap1?.Dispose();
+                _refBitmap1 = null;
+                _refBase1?.Dispose();
+                _refBase1 = null;
+                ClearPicImage(picRef1);
+            }
             else
-                DisposeRef(ref _refBitmap2, picRef2);
+            {
+                _markup2.Clear();
+                _refBitmap2?.Dispose();
+                _refBitmap2 = null;
+                _refBase2?.Dispose();
+                _refBase2 = null;
+                ClearPicImage(picRef2);
+            }
         }
 
-        private static void DisposeRef(ref Bitmap? bmp, PictureBox pic)
+        private static void ClearPicImage(PictureBox pic)
         {
-            bmp?.Dispose();
-            bmp = null;
-            if (pic.Image != null)
-            {
-                pic.Image.Dispose();
-                pic.Image = null;
-            }
+            if (pic.Image == null) return;
+            pic.Image.Dispose();
+            pic.Image = null;
         }
 
         private void SetRef(int slot, Bitmap bmp)
         {
             if (slot == 1)
             {
-                DisposeRef(ref _refBitmap1, picRef1);
-                _refBitmap1 = bmp;
-                picRef1.Image = bmp;
+                DisposeRefSlot(1);
+                _refBase1 = bmp;
+                RebuildRefComposite(1);
             }
             else
             {
-                DisposeRef(ref _refBitmap2, picRef2);
-                _refBitmap2 = bmp;
-                picRef2.Image = bmp;
+                DisposeRefSlot(2);
+                _refBase2 = bmp;
+                RebuildRefComposite(2);
             }
+        }
+
+        private void RebuildRefComposite(int slot)
+        {
+            var baseBmp = slot == 1 ? _refBase1 : _refBase2;
+            var markup = slot == 1 ? _markup1 : _markup2;
+            var pic = slot == 1 ? picRef1 : picRef2;
+
+            if (baseBmp == null)
+            {
+                if (slot == 1)
+                {
+                    _refBitmap1?.Dispose();
+                    _refBitmap1 = null;
+                }
+                else
+                {
+                    _refBitmap2?.Dispose();
+                    _refBitmap2 = null;
+                }
+
+                ClearPicImage(pic);
+                return;
+            }
+
+            var composite = new Bitmap(baseBmp.Width, baseBmp.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(composite))
+            {
+                g.DrawImageUnscaled(baseBmp, 0, 0);
+                foreach (var m in markup)
+                {
+                    using var pen = new Pen(m.Color, MarkupPenWidthPx);
+                    g.DrawRectangle(pen, m.Bounds);
+                }
+            }
+
+            if (slot == 1)
+            {
+                _refBitmap1?.Dispose();
+                _refBitmap1 = composite;
+            }
+            else
+            {
+                _refBitmap2?.Dispose();
+                _refBitmap2 = composite;
+            }
+
+            ClearPicImage(pic);
+            pic.Image = composite;
+        }
+
+        private static RectangleF GetDisplayedImageRect(PictureBox pic, Size imgSize)
+        {
+            var cw = pic.ClientSize.Width;
+            var ch = pic.ClientSize.Height;
+            if (cw <= 0 || ch <= 0 || imgSize.Width <= 0 || imgSize.Height <= 0)
+                return RectangleF.Empty;
+
+            var scale = Math.Min(cw / (float)imgSize.Width, ch / (float)imgSize.Height);
+            var w = imgSize.Width * scale;
+            var h = imgSize.Height * scale;
+            var x = (cw - w) / 2f;
+            var y = (ch - h) / 2f;
+            return new RectangleF(x, y, w, h);
+        }
+
+        private static bool TryImagePointFromClient(PictureBox pic, Bitmap img, Point client, out Point imagePoint)
+        {
+            imagePoint = default;
+            var dr = GetDisplayedImageRect(pic, img.Size);
+            if (dr.Width <= 0 || dr.Height <= 0) return false;
+            if (client.X < dr.Left || client.X > dr.Right || client.Y < dr.Top || client.Y > dr.Bottom)
+                return false;
+
+            var ix = (int)Math.Round((client.X - dr.X) / dr.Width * img.Width);
+            var iy = (int)Math.Round((client.Y - dr.Y) / dr.Height * img.Height);
+            imagePoint = new Point(Math.Clamp(ix, 0, img.Width - 1), Math.Clamp(iy, 0, img.Height - 1));
+            return true;
+        }
+
+        private static Point ImagePointFromClientClamped(PictureBox pic, Bitmap img, Point client)
+        {
+            var dr = GetDisplayedImageRect(pic, img.Size);
+            if (dr.Width <= 0) return Point.Empty;
+            var cx = Math.Clamp(client.X, dr.Left, dr.Right);
+            var cy = Math.Clamp(client.Y, dr.Top, dr.Bottom);
+            var ix = (int)Math.Round((cx - dr.X) / dr.Width * img.Width);
+            var iy = (int)Math.Round((cy - dr.Y) / dr.Height * img.Height);
+            return new Point(Math.Clamp(ix, 0, img.Width - 1), Math.Clamp(iy, 0, img.Height - 1));
+        }
+
+        private static Point ImagePointToClient(PictureBox pic, Bitmap img, Point imagePoint)
+        {
+            var dr = GetDisplayedImageRect(pic, img.Size);
+            var x = dr.X + imagePoint.X * (dr.Width / img.Width);
+            var y = dr.Y + imagePoint.Y * (dr.Height / img.Height);
+            return new Point((int)Math.Round(x), (int)Math.Round(y));
+        }
+
+        private static Rectangle NormalizeImageRect(Point a, Point b, Size maxSize)
+        {
+            var x1 = Math.Clamp(Math.Min(a.X, b.X), 0, maxSize.Width - 1);
+            var y1 = Math.Clamp(Math.Min(a.Y, b.Y), 0, maxSize.Height - 1);
+            var x2 = Math.Clamp(Math.Max(a.X, b.X), 0, maxSize.Width - 1);
+            var y2 = Math.Clamp(Math.Max(a.Y, b.Y), 0, maxSize.Height - 1);
+            return Rectangle.FromLTRB(x1, y1, x2, y2);
+        }
+
+        private void PicRef_MouseDown(object? sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left) return;
+            if (sender is not ReferenceImagePictureBox pic) return;
+            var slot = ReferencePictureSlot(pic);
+            var b = slot == 1 ? _refBase1 : _refBase2;
+            if (b == null || !TryImagePointFromClient(pic, b, e.Location, out var ip)) return;
+
+            _dragActive = true;
+            _dragSlot = slot;
+            _dragStartImg = ip;
+            _dragCurrentImg = ip;
+            pic.Capture = true;
+            pic.Invalidate();
+        }
+
+        private void PicRef_MouseMove(object? sender, MouseEventArgs e)
+        {
+            if (!_dragActive || sender is not ReferenceImagePictureBox pic) return;
+            var slot = ReferencePictureSlot(pic);
+            if (slot != _dragSlot) return;
+            var b = slot == 1 ? _refBase1 : _refBase2;
+            if (b == null) return;
+
+            _dragCurrentImg = ImagePointFromClientClamped(pic, b, e.Location);
+            pic.Invalidate();
+        }
+
+        private void PicRef_MouseUp(object? sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left) return;
+            if (sender is not ReferenceImagePictureBox pic) return;
+            var slot = ReferencePictureSlot(pic);
+            if (!_dragActive || slot != _dragSlot)
+            {
+                pic.Capture = false;
+                return;
+            }
+
+            _dragActive = false;
+            _dragSlot = 0;
+            pic.Capture = false;
+
+            var b = slot == 1 ? _refBase1 : _refBase2;
+            if (b != null)
+            {
+                var r = NormalizeImageRect(_dragStartImg, _dragCurrentImg, b.Size);
+                if (r.Width >= 2 && r.Height >= 2)
+                {
+                    var list = slot == 1 ? _markup1 : _markup2;
+                    list.Add(new MarkupStroke(r, _markupDrawColor));
+                    RebuildRefComposite(slot);
+                }
+            }
+
+            pic.Invalidate();
+        }
+
+        private int ReferencePictureSlot(ReferenceImagePictureBox pic) => ReferenceEquals(pic, picRef1) ? 1 : 2;
+
+        private void PaintMarkupDragOverlay(Graphics g, ReferenceImagePictureBox pic, int slot)
+        {
+            if (!_dragActive || _dragSlot != slot) return;
+            var b = slot == 1 ? _refBase1 : _refBase2;
+            if (b == null) return;
+
+            var rImg = NormalizeImageRect(_dragStartImg, _dragCurrentImg, b.Size);
+            if (rImg.Width < 1 || rImg.Height < 1) return;
+
+            var tl = ImagePointToClient(pic, b, new Point(rImg.Left, rImg.Top));
+            var br = ImagePointToClient(pic, b, new Point(rImg.Right, rImg.Bottom));
+            var rc = Rectangle.FromLTRB(
+                Math.Min(tl.X, br.X), Math.Min(tl.Y, br.Y),
+                Math.Max(tl.X, br.X), Math.Max(tl.Y, br.Y));
+            using var pen = new Pen(Color.FromArgb(220, _markupDrawColor), MarkupPenWidthPx) { DashStyle = DashStyle.Dash };
+            g.DrawRectangle(pen, rc);
+        }
+
+        private void BtnMarkupColor_Click(object? sender, EventArgs e)
+        {
+            using var dlg = new ColorDialog { Color = _markupDrawColor, FullOpen = true };
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+            _markupDrawColor = dlg.Color;
+            SyncMarkupColorButton();
+        }
+
+        private void SyncMarkupColorButton()
+        {
+            btnMarkupColor.BackColor = _markupDrawColor;
+            var bright = _markupDrawColor.GetBrightness();
+            btnMarkupColor.ForeColor = bright > 0.55 ? Color.Black : Color.White;
+        }
+
+        private bool HasAnyMarkup() => _markup1.Count > 0 || _markup2.Count > 0;
+
+        private bool UndoLastMarkupForSelectedTab()
+        {
+            var idx = tabRefs.SelectedIndex;
+            if (idx == 0 && _markup1.Count > 0)
+            {
+                _markup1.RemoveAt(_markup1.Count - 1);
+                RebuildRefComposite(1);
+                return true;
+            }
+
+            if (idx == 1 && _markup2.Count > 0)
+            {
+                _markup2.RemoveAt(_markup2.Count - 1);
+                RebuildRefComposite(2);
+                return true;
+            }
+
+            return false;
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == (Keys.Control | Keys.Z) && panelGenerate.Visible && UndoLastMarkupForSelectedTab())
+                return true;
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private string? ResolveAutoNameAppContextForApi()
+        {
+            if (_getAutoNameAppContextForApi != null)
+            {
+                var fromMain = (_getAutoNameAppContextForApi.Invoke() ?? "").Trim();
+                return string.IsNullOrEmpty(fromMain) ? null : fromMain;
+            }
+
+            var fromSettings = _settings.LastAutoNameAppContext?.Trim();
+            return string.IsNullOrEmpty(fromSettings) ? null : fromSettings;
         }
 
         private async void BtnGenerate_Click(object? sender, EventArgs e)
@@ -278,6 +556,17 @@ namespace IconChop
                 return;
             }
 
+            var apiPrompt = chkIncludeAutoNameDescription.Checked
+                ? OpenAiImageClient.MergeImagePromptWithAutoNameAppContext(prompt, ResolveAutoNameAppContextForApi())
+                : prompt;
+
+            if (HasAnyMarkup())
+            {
+                apiPrompt = string.IsNullOrWhiteSpace(apiPrompt)
+                    ? MarkupPromptSuffix
+                    : apiPrompt + "\n\n" + MarkupPromptSuffix;
+            }
+
             var refs = new List<Bitmap>();
             if (_refBitmap1 != null) refs.Add(_refBitmap1);
             if (_refBitmap2 != null) refs.Add(_refBitmap2);
@@ -287,7 +576,7 @@ namespace IconChop
             try
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(6));
-                var result = await OpenAiImageClient.GenerateAsync(_settings, prompt, refs, cts.Token)
+                var result = await OpenAiImageClient.GenerateAsync(_settings, apiPrompt, refs, cts.Token)
                     .ConfigureAwait(true);
 
                 AddPromptToMru(prompt);

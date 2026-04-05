@@ -7,7 +7,7 @@
     <PackageId>IconChop</PackageId>
     <Version Condition="'$(Version)' == ''">1.0.0</Version>
     <DefineConstants>ProductVersion=$(Version);</DefineConstants>
-    <!-- Default so MSI can be built after running Create-Release-SelfContained.ps1 -->
+    <!-- Default so MSI can be built after running scripts/Create-Release-SelfContained.ps1 -->
     <PublishPath Condition="'$(PublishPath)' == ''">$(MSBuildThisFileDirectory)publish-selfcontained</PublishPath>
     <!-- Resolve to full path so linker can find harvested files (Heat uses SourceDir in generated authoring) -->
     <PublishPathFull>$([System.IO.Path]::GetFullPath('$(PublishPath)'))</PublishPathFull>
@@ -22,7 +22,7 @@
     </BindPath>
   </ItemGroup>
   <ItemGroup>
-    <!-- Harvest published app files. Build after publishing (e.g. Create-Release-SelfContained.ps1). -->
+    <!-- Harvest published app files. Build after publishing (e.g. scripts/Create-Release-SelfContained.ps1). -->
     <HarvestDirectory Include="$(PublishPath)">
       <ComponentGroupName>HarvestedApp</ComponentGroupName>
       <DirectoryRefId>INSTALLFOLDER</DirectoryRefId>

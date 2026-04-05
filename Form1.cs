@@ -21,13 +21,24 @@ namespace IconChop
         private static readonly Color SentinelPink = Color.FromArgb(255, 255, 0, 255);
         private static readonly Color SelectionGlowColor = Color.FromArgb(255, 200, 80);
         private const int SelectionBorderPadding = 4;
+        /// <summary>Dropdown sentinel: choosing it clears context (no extra prompt text).</summary>
+        private const string AutoNameAppContextNoneItem = "<no description>";
+        private bool _namingAppContextComboProgrammatic;
 
         private readonly string? _initialFilePath;
+        private readonly ContextMenuStrip _sourceHistoryMenu = new();
+        private readonly ContextMenuStrip _previewIconContextMenu = new();
 
         public Form1(string? initialFilePath = null)
         {
             _initialFilePath = initialFilePath;
             InitializeComponent();
+            _sourceHistoryMenu.ImageScalingSize = new Size(40, 40);
+            _sourceHistoryMenu.ItemClicked += SourceHistoryMenu_ItemClicked;
+            _sourceHistoryMenu.Closed += SourceHistoryMenu_Closed;
+            var usePreviewAsSource = new ToolStripMenuItem("Use as Source Image");
+            usePreviewAsSource.Click += PreviewUseAsSource_Click;
+            _previewIconContextMenu.Items.Add(usePreviewAsSource);
             try
             {
                 Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? Icon;
@@ -36,10 +47,71 @@ namespace IconChop
             SetupDragDrop();
             Load += Form1_Load;
             FormClosing += Form1_FormClosing;
+            FormClosed += Form1_FormClosed;
+        }
+
+        private void Form1_FormClosed(object? sender, FormClosedEventArgs e)
+        {
+            DisposeMainToolbarButtonImages();
+            _sourceHistoryMenu.ItemClicked -= SourceHistoryMenu_ItemClicked;
+            _sourceHistoryMenu.Closed -= SourceHistoryMenu_Closed;
+            DisposeSourceHistoryMenuImages();
+            _sourceHistoryMenu.Items.Clear();
+            _sourceHistoryMenu.Dispose();
+            foreach (ToolStripItem item in _previewIconContextMenu.Items)
+                if (item is ToolStripMenuItem mi)
+                    mi.Click -= PreviewUseAsSource_Click;
+            _previewIconContextMenu.Items.Clear();
+            _previewIconContextMenu.Dispose();
+        }
+
+        private static Image? LoadToolbarButtonImage(string fileName, int maxEdgePx)
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "images", fileName);
+            if (!File.Exists(path))
+                return null;
+            using var src = Image.FromFile(path);
+            var w = src.Width;
+            var h = src.Height;
+            if (w <= maxEdgePx && h <= maxEdgePx)
+                return new Bitmap(src);
+            var scale = Math.Min((double)maxEdgePx / w, (double)maxEdgePx / h);
+            var nw = Math.Max(1, (int)Math.Round(w * scale));
+            var nh = Math.Max(1, (int)Math.Round(h * scale));
+            return new Bitmap(src, new Size(nw, nh));
+        }
+
+        private static void SetToolbarButtonImage(Button btn, string fileName, int maxEdgePx)
+        {
+            var img = LoadToolbarButtonImage(fileName, maxEdgePx);
+            if (img == null)
+                return;
+            btn.Image?.Dispose();
+            btn.Image = img;
+        }
+
+        private void ApplyMainToolbarButtonImages()
+        {
+            SetToolbarButtonImage(btnBrowse, "folder-icon_32x32.png", 18);
+            SetToolbarButtonImage(btnSourcePaste, "clipboard-icon_32x32.png", 24);
+            SetToolbarButtonImage(btnSourceHistory, "clock-icon_32x32.png", 24);
+            SetToolbarButtonImage(btnSourceGenerate, "performance-metrics-icon_32x32.png", 24);
+            SetToolbarButtonImage(btnSourceVary, "refresh-icon_32x32.png", 24);
+        }
+
+        private void DisposeMainToolbarButtonImages()
+        {
+            foreach (var btn in new[] { btnBrowse, btnSourcePaste, btnSourceHistory, btnSourceGenerate, btnSourceVary })
+            {
+                var img = btn.Image;
+                btn.Image = null;
+                img?.Dispose();
+            }
         }
 
         private void Form1_Load(object? sender, EventArgs e)
         {
+            ApplyMainToolbarButtonImages();
             RestoreFormBounds();
             var fmt = _settings.OutputFormat;
             cboOutputFormat.SelectedIndex = fmt == "Ico" ? 1 : fmt == "Both" ? 2 : 0;
@@ -60,6 +132,14 @@ namespace IconChop
                 LoadImage(_initialFilePath);
             else if (!string.IsNullOrWhiteSpace(_settings.LastInputPath) && File.Exists(_settings.LastInputPath))
                 LoadImage(_settings.LastInputPath);
+
+            RebuildNamingAppContextCombo();
+            cboNamingAppContext.SelectedIndexChanged += CboNamingAppContext_SelectedIndexChanged;
+            var lastCtx = _settings.LastAutoNameAppContext?.Trim();
+            if (!string.IsNullOrEmpty(lastCtx))
+                cboNamingAppContext.Text = lastCtx;
+            cboNamingAppContext.Enabled = chkAutoName.Checked;
+            UpdateOpenAiGenerateUiEnabled();
         }
 
         private void Form1_FormClosing(object? sender, FormClosingEventArgs e)
@@ -85,6 +165,13 @@ namespace IconChop
                 _settings.OutputDirMru = mru.Take(AppSettings.MruMax).ToList();
             }
             _settings.LastInputPath = _currentInputPath;
+            _settings.InputImageMru = _settings.InputImageMru
+                .Where(p => File.Exists(p))
+                .Take(AppSettings.InputImageMruMax)
+                .ToList();
+            var appCtx = (cboNamingAppContext.Text ?? "").Trim();
+            _settings.LastAutoNameAppContext = string.IsNullOrEmpty(appCtx) ? null : appCtx;
+            PrependAutoNameAppContextMru(appCtx);
             SaveFormBounds();
             _settings.Save();
         }
@@ -150,24 +237,141 @@ namespace IconChop
         {
             using var dlg = new SettingsForm(_settings);
             dlg.ShowDialog(this);
+            UpdateOpenAiGenerateUiEnabled();
         }
 
-        private void MnuImageGenerate_Click(object? sender, EventArgs e)
+        /// <summary>Enables Generate when the OpenAI image API key is set (same as generation).</summary>
+        private void UpdateOpenAiGenerateUiEnabled()
         {
-            using var dlg = new ImageGenerateForm(_settings);
+            var configured = !string.IsNullOrWhiteSpace(_settings.OpenAiApiKey);
+            btnSourceGenerate.Enabled = configured;
+            btnSourceVary.Enabled = configured && _sourceImage != null;
+            mnuImageGenerate.Enabled = configured;
+        }
+
+        private void OpenImageGenerateDialog(Bitmap? initialReference1FromSource = null)
+        {
+            using var dlg = new ImageGenerateForm(
+                _settings,
+                GetAutoNameAppContextForApi,
+                initialReference1FromSource,
+                () => _sourceImage);
             if (dlg.ShowDialog(this) == DialogResult.OK && dlg.AcceptedImage != null)
                 ApplyGeneratedImage(dlg.AcceptedImage);
+        }
+
+        private void MnuImageGenerate_Click(object? sender, EventArgs e) => OpenImageGenerateDialog();
+
+        private void BtnSourceGenerate_Click(object? sender, EventArgs e) => OpenImageGenerateDialog();
+
+        private void BtnSourceVary_Click(object? sender, EventArgs e)
+        {
+            if (_sourceImage == null)
+            {
+                MessageBox.Show("Load or paste a source image first.", "Vary",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            OpenImageGenerateDialog(_sourceImage);
+        }
+
+        private void BtnSourcePaste_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (!Clipboard.ContainsImage())
+                {
+                    MessageBox.Show("The clipboard does not contain an image.", "Paste",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                using var clip = Clipboard.GetImage();
+                if (clip is null)
+                {
+                    MessageBox.Show("The clipboard does not contain an image.", "Paste",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                var pasted = new Bitmap(clip);
+                StopFileWatcher();
+                _sourceImage?.Dispose();
+                _sourceImage = pasted;
+                picSource.Image = _sourceImage;
+                _currentInputPath = null;
+                Text = "IconChop — (pasted image)";
+                DetectAndPreview();
+                UpdateOpenAiGenerateUiEnabled();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not paste from clipboard:\n{ex.Message}", "Paste",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void ApplyGeneratedImage(Bitmap newImage)
         {
             StopFileWatcher();
+
+            string? backedPath = null;
+            try
+            {
+                Directory.CreateDirectory(AppSettings.TempDirectoryPath);
+                var fileName = $"generated-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}.png";
+                var path = Path.Combine(AppSettings.TempDirectoryPath, fileName);
+                newImage.Save(path, ImageFormat.Png);
+                backedPath = Path.GetFullPath(path);
+            }
+            catch
+            {
+                // Still adopt the bitmap; MRU/path only if backup succeeds.
+            }
+
             _sourceImage?.Dispose();
             _sourceImage = newImage;
             picSource.Image = _sourceImage;
-            _currentInputPath = null;
-            Text = "IconChop — (generated image)";
+
+            if (backedPath != null)
+            {
+                _currentInputPath = backedPath;
+                RecordInputImageMru(_settings, backedPath);
+                Text = $"IconChop — {Path.GetFileName(backedPath)}";
+                if (_settings.AutoReloadInput)
+                    StartFileWatcher(backedPath);
+            }
+            else
+            {
+                _currentInputPath = null;
+                Text = "IconChop — (generated image)";
+            }
+
             DetectAndPreview();
+            UpdateOpenAiGenerateUiEnabled();
+        }
+
+        private void PreviewUseAsSource_Click(object? sender, EventArgs e)
+        {
+            if (sender is not ToolStripMenuItem mi || mi.Owner is not ContextMenuStrip strip)
+                return;
+            int idx = strip.SourceControl switch
+            {
+                Panel p when p.Tag is int i => i,
+                PictureBox pb when pb.Parent is Panel par && par.Tag is int j => j,
+                _ => -1
+            };
+            if (idx < 0 || idx >= _detectedIcons.Count) return;
+            var clone = new Bitmap(_detectedIcons[idx]);
+            StopFileWatcher();
+            _sourceImage?.Dispose();
+            _sourceImage = clone;
+            picSource.Image = _sourceImage;
+            _currentInputPath = null;
+            Text = "IconChop — (preview icon)";
+            DetectAndPreview();
+            UpdateOpenAiGenerateUiEnabled();
         }
 
         private void BtnLoadImage_Click(object? sender, EventArgs e)
@@ -181,6 +385,125 @@ namespace IconChop
                 LoadImage(ofd.FileName);
         }
 
+        private void BtnSourceHistory_Click(object? sender, EventArgs e)
+        {
+            if (_sourceHistoryMenu.Visible)
+            {
+                _sourceHistoryMenu.Close();
+                return;
+            }
+
+            DisposeSourceHistoryMenuImages();
+            _sourceHistoryMenu.Items.Clear();
+
+            var paths = _settings.InputImageMru.Where(File.Exists).Take(AppSettings.InputImageMruMax).ToList();
+            if (paths.Count == 0)
+            {
+                _sourceHistoryMenu.Items.Add(new ToolStripMenuItem("(No recent images)") { Enabled = false });
+            }
+            else
+            {
+                foreach (var path in paths)
+                {
+                    Image? thumb = null;
+                    try
+                    {
+                        thumb = CreateSourceHistoryThumbnail(path, 40);
+                    }
+                    catch
+                    {
+                        // skip thumbnail; item still usable
+                    }
+
+                    var item = new ToolStripMenuItem(Path.GetFileName(path))
+                    {
+                        Image = thumb,
+                        Tag = path,
+                        ToolTipText = path
+                    };
+                    _sourceHistoryMenu.Items.Add(item);
+                }
+            }
+
+            var btn = btnSourceHistory;
+            _sourceHistoryMenu.Show(btn, new Point(0, btn.Height));
+        }
+
+        private void SourceHistoryMenu_ItemClicked(object? sender, ToolStripItemClickedEventArgs e)
+        {
+            if (e.ClickedItem is not ToolStripMenuItem mi || !mi.Enabled)
+                return;
+            if (mi.Tag is not string path || string.IsNullOrEmpty(path) || !File.Exists(path))
+                return;
+            // Run after the dropdown finishes closing so it does not fight teardown / event order.
+            BeginInvoke(() => LoadImage(path));
+        }
+
+        private void SourceHistoryMenu_Closed(object? sender, ToolStripDropDownClosedEventArgs e)
+        {
+            DisposeSourceHistoryMenuImages();
+            _sourceHistoryMenu.Items.Clear();
+        }
+
+        private void DisposeSourceHistoryMenuImages()
+        {
+            foreach (ToolStripItem item in _sourceHistoryMenu.Items)
+            {
+                if (item is ToolStripMenuItem mi && mi.Image != null)
+                {
+                    mi.Image.Dispose();
+                    mi.Image = null;
+                }
+            }
+        }
+
+        private static void RecordInputImageMru(AppSettings settings, string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+            string full;
+            try
+            {
+                full = Path.GetFullPath(path);
+            }
+            catch
+            {
+                return;
+            }
+
+            settings.InputImageMru = settings.InputImageMru
+                .Where(p => !string.Equals(p, full, StringComparison.OrdinalIgnoreCase))
+                .Prepend(full)
+                .Take(AppSettings.InputImageMruMax)
+                .ToList();
+        }
+
+        private static Image CreateSourceHistoryThumbnail(string path, int boxSize)
+        {
+            using var stream = File.OpenRead(path);
+            using var src = new Bitmap(stream);
+            var thumb = new Bitmap(boxSize, boxSize, PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(thumb))
+            {
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.Clear(Color.FromArgb(45, 45, 48));
+                var dest = FitInside(src.Width, src.Height, boxSize, boxSize);
+                g.DrawImage(src, dest);
+            }
+
+            return thumb;
+        }
+
+        private static Rectangle FitInside(int srcW, int srcH, int boxW, int boxH)
+        {
+            if (srcW <= 0 || srcH <= 0) return new Rectangle(0, 0, boxW, boxH);
+            float scale = Math.Min((float)boxW / srcW, (float)boxH / srcH);
+            int w = Math.Max(1, (int)Math.Round(srcW * scale));
+            int h = Math.Max(1, (int)Math.Round(srcH * scale));
+            int x = (boxW - w) / 2;
+            int y = (boxH - h) / 2;
+            return new Rectangle(x, y, w, h);
+        }
+
         private void LoadImage(string path)
         {
             try
@@ -192,9 +515,11 @@ namespace IconChop
                 picSource.Image = _sourceImage;
                 _currentInputPath = path;
                 Text = $"IconChop — {Path.GetFileName(path)}";
+                RecordInputImageMru(_settings, path);
                 DetectAndPreview();
                 if (_settings.AutoReloadInput && !string.IsNullOrEmpty(path))
                     StartFileWatcher(path);
+                UpdateOpenAiGenerateUiEnabled();
             }
             catch (Exception ex)
             {
@@ -298,6 +623,8 @@ namespace IconChop
                 panel.Controls.Add(pb);
                 panel.Click += PreviewTile_Click;
                 pb.Click += PreviewTile_Click;
+                panel.ContextMenuStrip = _previewIconContextMenu;
+                pb.ContextMenuStrip = _previewIconContextMenu;
                 flowPreview.Controls.Add(panel);
             }
 
@@ -672,6 +999,69 @@ namespace IconChop
         private void ChkAutoName_CheckedChanged(object? sender, EventArgs e)
         {
             txtOutputPrefix.Enabled = !chkAutoName.Checked;
+            cboNamingAppContext.Enabled = chkAutoName.Checked;
+        }
+
+        private void RebuildNamingAppContextCombo()
+        {
+            var saved = cboNamingAppContext.Text ?? "";
+            _namingAppContextComboProgrammatic = true;
+            try
+            {
+                cboNamingAppContext.Items.Clear();
+                cboNamingAppContext.Items.Add(AutoNameAppContextNoneItem);
+                foreach (var entry in _settings.AutoNameAppContextMru
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Where(x => !string.Equals(x.Trim(), AutoNameAppContextNoneItem, StringComparison.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(AppSettings.AutoNameAppContextMruMax))
+                    cboNamingAppContext.Items.Add(entry);
+                cboNamingAppContext.Text = saved;
+            }
+            finally
+            {
+                _namingAppContextComboProgrammatic = false;
+            }
+        }
+
+        private void CboNamingAppContext_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            if (_namingAppContextComboProgrammatic) return;
+            if (cboNamingAppContext.SelectedIndex < 0) return;
+            if (cboNamingAppContext.SelectedItem is not string s) return;
+            if (!string.Equals(s, AutoNameAppContextNoneItem, StringComparison.OrdinalIgnoreCase)) return;
+            _namingAppContextComboProgrammatic = true;
+            try
+            {
+                cboNamingAppContext.Text = "";
+                cboNamingAppContext.SelectedIndex = -1;
+            }
+            finally
+            {
+                _namingAppContextComboProgrammatic = false;
+            }
+        }
+
+        private static void PrependAutoNameAppContextMru(AppSettings settings, string trimmedContext)
+        {
+            if (string.IsNullOrEmpty(trimmedContext)) return;
+            if (string.Equals(trimmedContext, AutoNameAppContextNoneItem, StringComparison.OrdinalIgnoreCase)) return;
+            settings.AutoNameAppContextMru = settings.AutoNameAppContextMru
+                .Where(x => !string.Equals(x, trimmedContext, StringComparison.OrdinalIgnoreCase))
+                .Prepend(trimmedContext)
+                .Take(AppSettings.AutoNameAppContextMruMax)
+                .ToList();
+        }
+
+        private void PrependAutoNameAppContextMru(string trimmedContext)
+        {
+            PrependAutoNameAppContextMru(_settings, trimmedContext);
+        }
+
+        private string? GetAutoNameAppContextForApi()
+        {
+            var t = (cboNamingAppContext.Text ?? "").Trim();
+            return string.IsNullOrEmpty(t) ? null : t;
         }
 
         // -------------------------------------------------------------------
@@ -728,9 +1118,16 @@ namespace IconChop
                     try
                     {
                         var iconsToName = indicesToExport.Select(i => _detectedIcons[i]).ToList();
+                        var appCtx = GetAutoNameAppContextForApi();
                         var names = await OpenAiImageClient.SuggestFilenamesAsync(
-                            _settings, iconsToName, CancellationToken.None);
+                            _settings, iconsToName, appCtx, CancellationToken.None);
                         autoNames = [.. names];
+                        if (appCtx != null)
+                        {
+                            PrependAutoNameAppContextMru(appCtx);
+                            RebuildNamingAppContextCombo();
+                            cboNamingAppContext.Text = appCtx;
+                        }
                     }
                     catch (Exception ex)
                     {
