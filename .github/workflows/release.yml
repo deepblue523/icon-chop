@@ -47,14 +47,15 @@ jobs:
             -p:SatelliteResourceLanguages=en-US
           Compress-Archive -Path publish-sc\* -DestinationPath release\IconChop-${{ steps.version.outputs.VERSION }}-self-contained.zip -Force
 
-      - name: Build MSI
+      - name: Build Setup.exe (WiX bundle)
         run: |
           $publishPath = (Resolve-Path publish-sc).Path
-          dotnet build IconChop.Setup.wixproj -c Release `
+          dotnet build bundle\IconChop.Bundle.wixproj -c Release `
             -p:Version=${{ steps.version.outputs.VERSION }} `
             -p:PublishPath=$publishPath `
             -p:SuppressValidation=true
-          Copy-Item bin\Release\IconChop.Setup.msi release\IconChop-${{ steps.version.outputs.VERSION }}.msi -Force
+          $exe = Get-ChildItem -Path bundle\bin -Recurse -Filter IconChop.Bundle.exe | Select-Object -First 1
+          Copy-Item $exe.FullName release\IconChop-${{ steps.version.outputs.VERSION }}-Setup.exe -Force
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -65,6 +66,6 @@ jobs:
           files: |
             release/IconChop-${{ steps.version.outputs.VERSION }}.zip
             release/IconChop-${{ steps.version.outputs.VERSION }}-self-contained.zip
-            release/IconChop-${{ steps.version.outputs.VERSION }}.msi
+            release/IconChop-${{ steps.version.outputs.VERSION }}-Setup.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

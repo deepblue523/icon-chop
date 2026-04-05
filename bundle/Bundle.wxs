@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
+  <!-- Wraps the MSI built by IconChop.Setup; Burn produces a single Setup .exe -->
+  <Bundle Name="IconChop"
+          Version="$(var.ProductVersion).0"
+          Manufacturer="IconChop"
+          UpgradeCode="f7c8d9e0-1a2b-4c3d-8e9f-0a1b2c3d4e5f">
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication LicenseUrl=""
+                                             Theme="hyperlinkLicense" />
+    </BootstrapperApplication>
+    <Chain>
+      <MsiPackage Id="IconChopMsi"
+                  SourceFile="$(var.IconChop.Setup.TargetPath)"
+                  Vital="yes" />
+    </Chain>
+  </Bundle>
+</Wix>
