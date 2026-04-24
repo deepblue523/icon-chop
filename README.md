@@ -54,22 +54,24 @@ dotnet run
 
 For a release package:
 
-- **Both variants + MSI (local):**  
-  `.\scripts\Create-Release-All.ps1`  
-  Produces `release\IconChop-<version>.zip`, `release\IconChop-<version>-self-contained.zip`, and `release\IconChop-<version>.msi`.  
-  Add **`-UploadToGitHub`** to create or update GitHub release **`v<version>`** and attach all three files. Requires the [GitHub CLI](https://cli.github.com/) (`gh`) and `gh auth login`.
+- **Both variants + Windows installer (local):**  
+  `.\Create-Release-All.ps1`  
+  Produces `release\IconChop-<version>.zip`, `release\IconChop-<version>-self-contained.zip`, and `release\IconChop-<version>-Setup.exe`.
+
+- **Publish to GitHub (local build + push tag):**  
+  `.\Publish-Release.ps1` or `.\Publish-Release.ps1 -Bump patch`  
+  Runs `Create-Release-All.ps1`, commits `IconChop.csproj` when you use `-Bump`, pushes your branch, then pushes `v<version>` so the **Release** workflow builds on GitHub and attaches assets to a GitHub Release. Use `-DryRun` to preview steps.
 
 - **Framework-dependent only** (needs .NET 8 on the target PC):  
-  `.\scripts\Create-Release.ps1`  
-  **`.\scripts\Create-Release.ps1 -UploadToGitHub`** runs the full release (same as `Create-Release-All.ps1 -UploadToGitHub`) and uploads all artifacts to GitHub.
+  `.\Create-Release.ps1`
 
 - **Self-contained only** (single-folder deploy, no .NET install needed):  
-  `.\scripts\Create-Release-SelfContained.ps1`
+  `.\Create-Release-SelfContained.ps1`
 
 ### GitHub releases (automated)
 
 1. **Bump version and start a release:** In GitHub, go to **Actions → Version bump**, click **Run workflow**, choose **patch** (or **minor** / **major**), then **Run**. The workflow updates `IconChop.csproj`, commits, and pushes a tag (e.g. `v1.0.1`).
-2. **Build and publish:** The **Release** workflow runs on that tag: it builds the framework-dependent zip, self-contained zip, and Windows MSI installer, then creates a GitHub Release with all three attached.
+2. **Build and publish:** The **Release** workflow runs on that tag: it builds the framework-dependent zip, self-contained zip, and Windows Setup executable (WiX bundle), then creates a GitHub Release with all three attached.
 
 ## Usage summary
 

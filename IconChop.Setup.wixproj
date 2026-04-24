@@ -1,5 +1,7 @@
 <Project Sdk="WixToolset.Sdk/6.0.2">
   <PropertyGroup>
+    <!-- Do not harvest bundle\*.wxs (Burn bundle lives in bundle\IconChop.Bundle.wixproj) -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);$(MSBuildThisFileDirectory)bundle\**</DefaultItemExcludes>
     <OutputType>Package</OutputType>
     <Platform>x64</Platform>
     <PackageId>IconChop</PackageId>
