@@ -32,6 +32,7 @@ namespace IconChop
             flowRef1Buttons = new FlowLayoutPanel();
             btnLoad1 = new Button();
             btnFromSource1 = new Button();
+            btnHistory1 = new Button();
             btnPaste1 = new Button();
             btnClear1 = new Button();
             tabPageRef2 = new TabPage();
@@ -39,6 +40,7 @@ namespace IconChop
             flowRef2Buttons = new FlowLayoutPanel();
             btnLoad2 = new Button();
             btnFromSource2 = new Button();
+            btnHistory2 = new Button();
             btnPaste2 = new Button();
             btnClear2 = new Button();
             panelGenButtons = new FlowLayoutPanel();
@@ -101,8 +103,10 @@ namespace IconChop
             lblIntro.Margin = new Padding(0, 0, 0, 8);
             lblIntro.Text =
                 "This feature generates a new image using OpenAI from your prompt below. " +
-                "Optional reference images (tabs) are sent to the model when present. " +
-                "Drag on a loaded reference image to draw highlight rectangles. " +
+                "The Missing icons tab (optional) can show your sheet with gaps or areas to fill; " +
+                "the Style reference tab (optional) can show an image whose look the model should imitate. " +
+                "Loaded tab images are sent to the model in that order when present. " +
+                "Drag on a loaded image to draw highlight rectangles. " +
                 "Configure your API key and model under Tools → Settings.";
             lblIntro.ForeColor = Color.FromArgb(80, 80, 80);
             lblIntro.TextAlign = ContentAlignment.TopLeft;
@@ -127,7 +131,7 @@ namespace IconChop
             lblTemplates.AutoSize = true;
             lblTemplates.Dock = DockStyle.Top;
             lblTemplates.Margin = new Padding(0, 0, 0, 4);
-            lblTemplates.Text = "Templates and recent prompts:";
+            lblTemplates.Text = "Starter prompts and recent history:";
 
             // cboTemplates
             cboTemplates.Dock = DockStyle.Fill;
@@ -160,7 +164,7 @@ namespace IconChop
 
             lblMarkupUndo.AutoSize = true;
             lblMarkupUndo.Margin = new Padding(0, 6, 0, 6);
-            lblMarkupUndo.Text = "Ctrl+Z: undo last rectangle on the selected image tab";
+            lblMarkupUndo.Text = "Ctrl+Z: undo last rectangle on the selected tab";
             lblMarkupUndo.ForeColor = Color.FromArgb(80, 80, 80);
 
             // tabRefs
@@ -171,7 +175,7 @@ namespace IconChop
             tabRefs.Controls.Add(tabPageRef2);
 
             // tabPageRef1
-            tabPageRef1.Text = "Image 1";
+            tabPageRef1.Text = "Missing icons";
             tabPageRef1.Padding = new Padding(8);
             tabPageRef1.Controls.Add(flowRef1Buttons);
             tabPageRef1.Controls.Add(picRef1);
@@ -191,31 +195,57 @@ namespace IconChop
             flowRef1Buttons.WrapContents = false;
             flowRef1Buttons.Controls.Add(btnLoad1);
             flowRef1Buttons.Controls.Add(btnFromSource1);
+            flowRef1Buttons.Controls.Add(btnHistory1);
             flowRef1Buttons.Controls.Add(btnPaste1);
             flowRef1Buttons.Controls.Add(btnClear1);
 
             btnLoad1.Text = "Load from file…";
             btnLoad1.AutoSize = true;
             btnLoad1.FlatStyle = FlatStyle.Flat;
+            btnLoad1.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnLoad1.ImageAlign = ContentAlignment.MiddleLeft;
+            btnLoad1.TextAlign = ContentAlignment.MiddleCenter;
+            btnLoad1.Padding = new Padding(6, 0, 6, 0);
             btnLoad1.Margin = new Padding(0, 0, 8, 0);
 
             btnFromSource1.Text = "From Source Image";
             btnFromSource1.AutoSize = true;
             btnFromSource1.FlatStyle = FlatStyle.Flat;
+            btnFromSource1.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnFromSource1.ImageAlign = ContentAlignment.MiddleLeft;
+            btnFromSource1.TextAlign = ContentAlignment.MiddleCenter;
+            btnFromSource1.Padding = new Padding(6, 0, 6, 0);
             btnFromSource1.Margin = new Padding(0, 0, 8, 0);
+
+            btnHistory1.Text = "History";
+            btnHistory1.AutoSize = true;
+            btnHistory1.FlatStyle = FlatStyle.Flat;
+            btnHistory1.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnHistory1.ImageAlign = ContentAlignment.MiddleLeft;
+            btnHistory1.TextAlign = ContentAlignment.MiddleCenter;
+            btnHistory1.Padding = new Padding(6, 0, 6, 0);
+            btnHistory1.Margin = new Padding(0, 0, 8, 0);
 
             btnPaste1.Text = "Paste";
             btnPaste1.AutoSize = true;
             btnPaste1.FlatStyle = FlatStyle.Flat;
+            btnPaste1.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnPaste1.ImageAlign = ContentAlignment.MiddleLeft;
+            btnPaste1.TextAlign = ContentAlignment.MiddleCenter;
+            btnPaste1.Padding = new Padding(6, 0, 6, 0);
             btnPaste1.Margin = new Padding(0, 0, 8, 0);
 
             btnClear1.Text = "Clear";
             btnClear1.AutoSize = true;
             btnClear1.FlatStyle = FlatStyle.Flat;
+            btnClear1.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnClear1.ImageAlign = ContentAlignment.MiddleLeft;
+            btnClear1.TextAlign = ContentAlignment.MiddleCenter;
+            btnClear1.Padding = new Padding(6, 0, 6, 0);
             btnClear1.Margin = new Padding(0);
 
             // tabPageRef2
-            tabPageRef2.Text = "Image 2";
+            tabPageRef2.Text = "Style reference";
             tabPageRef2.Padding = new Padding(8);
             tabPageRef2.Controls.Add(flowRef2Buttons);
             tabPageRef2.Controls.Add(picRef2);
@@ -225,6 +255,7 @@ namespace IconChop
             picRef2.BorderStyle = BorderStyle.FixedSingle;
             picRef2.SizeMode = PictureBoxSizeMode.Zoom;
             picRef2.TabStop = false;
+            picRef2.Cursor = Cursors.Cross;
 
             flowRef2Buttons.Dock = DockStyle.Bottom;
             flowRef2Buttons.Height = 44;
@@ -232,27 +263,53 @@ namespace IconChop
             flowRef2Buttons.WrapContents = false;
             flowRef2Buttons.Controls.Add(btnLoad2);
             flowRef2Buttons.Controls.Add(btnFromSource2);
+            flowRef2Buttons.Controls.Add(btnHistory2);
             flowRef2Buttons.Controls.Add(btnPaste2);
             flowRef2Buttons.Controls.Add(btnClear2);
 
             btnLoad2.Text = "Load from file…";
             btnLoad2.AutoSize = true;
             btnLoad2.FlatStyle = FlatStyle.Flat;
+            btnLoad2.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnLoad2.ImageAlign = ContentAlignment.MiddleLeft;
+            btnLoad2.TextAlign = ContentAlignment.MiddleCenter;
+            btnLoad2.Padding = new Padding(6, 0, 6, 0);
             btnLoad2.Margin = new Padding(0, 0, 8, 0);
 
             btnFromSource2.Text = "From Source Image";
             btnFromSource2.AutoSize = true;
             btnFromSource2.FlatStyle = FlatStyle.Flat;
+            btnFromSource2.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnFromSource2.ImageAlign = ContentAlignment.MiddleLeft;
+            btnFromSource2.TextAlign = ContentAlignment.MiddleCenter;
+            btnFromSource2.Padding = new Padding(6, 0, 6, 0);
             btnFromSource2.Margin = new Padding(0, 0, 8, 0);
+
+            btnHistory2.Text = "History";
+            btnHistory2.AutoSize = true;
+            btnHistory2.FlatStyle = FlatStyle.Flat;
+            btnHistory2.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnHistory2.ImageAlign = ContentAlignment.MiddleLeft;
+            btnHistory2.TextAlign = ContentAlignment.MiddleCenter;
+            btnHistory2.Padding = new Padding(6, 0, 6, 0);
+            btnHistory2.Margin = new Padding(0, 0, 8, 0);
 
             btnPaste2.Text = "Paste";
             btnPaste2.AutoSize = true;
             btnPaste2.FlatStyle = FlatStyle.Flat;
+            btnPaste2.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnPaste2.ImageAlign = ContentAlignment.MiddleLeft;
+            btnPaste2.TextAlign = ContentAlignment.MiddleCenter;
+            btnPaste2.Padding = new Padding(6, 0, 6, 0);
             btnPaste2.Margin = new Padding(0, 0, 8, 0);
 
             btnClear2.Text = "Clear";
             btnClear2.AutoSize = true;
             btnClear2.FlatStyle = FlatStyle.Flat;
+            btnClear2.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnClear2.ImageAlign = ContentAlignment.MiddleLeft;
+            btnClear2.TextAlign = ContentAlignment.MiddleCenter;
+            btnClear2.Padding = new Padding(6, 0, 6, 0);
             btnClear2.Margin = new Padding(0);
 
             // panelGenButtons
@@ -267,6 +324,10 @@ namespace IconChop
             btnGenerate.AutoSize = false;
             btnGenerate.Size = new Size(120, 30);
             btnGenerate.FlatStyle = FlatStyle.Flat;
+            btnGenerate.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnGenerate.ImageAlign = ContentAlignment.MiddleLeft;
+            btnGenerate.TextAlign = ContentAlignment.MiddleCenter;
+            btnGenerate.Padding = new Padding(8, 0, 4, 0);
             btnGenerate.BackColor = Color.FromArgb(46, 160, 67);
             btnGenerate.ForeColor = Color.White;
             btnGenerate.UseVisualStyleBackColor = false;
@@ -278,6 +339,10 @@ namespace IconChop
             btnCancel.AutoSize = false;
             btnCancel.Size = new Size(90, 30);
             btnCancel.FlatStyle = FlatStyle.Flat;
+            btnCancel.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnCancel.ImageAlign = ContentAlignment.MiddleLeft;
+            btnCancel.TextAlign = ContentAlignment.MiddleCenter;
+            btnCancel.Padding = new Padding(8, 0, 4, 0);
             btnCancel.DialogResult = DialogResult.Cancel;
             btnCancel.UseVisualStyleBackColor = false;
             btnCancel.FlatAppearance.BorderSize = 1;
@@ -327,6 +392,10 @@ namespace IconChop
             btnAccept.Text = "Accept";
             btnAccept.Size = new Size(100, 32);
             btnAccept.FlatStyle = FlatStyle.Flat;
+            btnAccept.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnAccept.ImageAlign = ContentAlignment.MiddleLeft;
+            btnAccept.TextAlign = ContentAlignment.MiddleCenter;
+            btnAccept.Padding = new Padding(8, 0, 4, 0);
             btnAccept.BackColor = Color.FromArgb(46, 160, 67);
             btnAccept.ForeColor = Color.White;
             btnAccept.FlatAppearance.BorderSize = 0;
@@ -335,6 +404,10 @@ namespace IconChop
             btnReject.Text = "Reject";
             btnReject.Size = new Size(100, 32);
             btnReject.FlatStyle = FlatStyle.Flat;
+            btnReject.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnReject.ImageAlign = ContentAlignment.MiddleLeft;
+            btnReject.TextAlign = ContentAlignment.MiddleCenter;
+            btnReject.Padding = new Padding(8, 0, 4, 0);
             btnReject.BackColor = Color.FromArgb(230, 230, 230);
             btnReject.FlatAppearance.BorderColor = Color.FromArgb(180, 180, 180);
 
@@ -390,6 +463,7 @@ namespace IconChop
         private FlowLayoutPanel flowRef1Buttons;
         private Button btnLoad1;
         private Button btnFromSource1;
+        private Button btnHistory1;
         private Button btnPaste1;
         private Button btnClear1;
         private TabPage tabPageRef2;
@@ -397,6 +471,7 @@ namespace IconChop
         private FlowLayoutPanel flowRef2Buttons;
         private Button btnLoad2;
         private Button btnFromSource2;
+        private Button btnHistory2;
         private Button btnPaste2;
         private Button btnClear2;
         private FlowLayoutPanel panelGenButtons;

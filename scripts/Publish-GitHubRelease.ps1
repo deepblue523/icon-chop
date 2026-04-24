@@ -30,8 +30,23 @@ foreach ($path in @($fdZip, $scZip, $msi)) {
 
 Push-Location $ProjectDir
 try {
-    gh release view $tag 2>&1 | Out-Null
-    $releaseExists = ($LASTEXITCODE -eq 0)
+    # gh prints "release not found" to stderr when probing — must not terminate the script.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "SilentlyContinue"
+    $prevNativeErr = $null
+    if ($PSVersionTable.PSVersion.Major -ge 7) {
+        $prevNativeErr = $PSNativeCommandUseErrorActionPreference
+        $PSNativeCommandUseErrorActionPreference = $false
+    }
+    try {
+        & gh release view $tag 2>$null | Out-Null
+        $releaseExists = ($LASTEXITCODE -eq 0)
+    } finally {
+        $ErrorActionPreference = $prevEap
+        if ($null -ne $prevNativeErr) {
+            $PSNativeCommandUseErrorActionPreference = $prevNativeErr
+        }
+    }
 
     if ($releaseExists) {
         Write-Host "Uploading assets to existing release $tag..." -ForegroundColor Yellow

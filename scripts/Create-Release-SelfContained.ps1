@@ -57,10 +57,16 @@ Write-Host "Building MSI: $msiName" -ForegroundColor Yellow
 $publishPathFull = (Resolve-Path $publishDir).Path
 dotnet build $wixprojPath -c Release -p:Version=$version -p:PublishPath=$publishPathFull -nologo -v:minimal
 if ($LASTEXITCODE -ne 0) { throw "MSI build failed." }
-$builtMsi = Join-Path $projectDir "bin\Release\IconChop.Setup.msi"
-if (Test-Path $builtMsi) {
+# WiX project uses Platform=x64 → output is bin\x64\Release\, not bin\Release\
+$builtMsi = @(
+    Join-Path $projectDir "bin\x64\Release\IconChop.Setup.msi"
+    Join-Path $projectDir "bin\Release\IconChop.Setup.msi"
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($builtMsi) {
     Copy-Item $builtMsi $msiPath -Force
     Write-Host "  MSI: $msiPath" -ForegroundColor Green
+} else {
+    throw "MSI build output not found (looked under bin\x64\Release and bin\Release)."
 }
 
 # Optional: remove publish folder to avoid clutter

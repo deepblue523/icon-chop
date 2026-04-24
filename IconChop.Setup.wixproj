@@ -9,6 +9,7 @@
     <PublishPath Condition="'$(PublishPath)' == ''">$(MSBuildThisFileDirectory)publish-selfcontained</PublishPath>
     <!-- Resolve to full path so linker can find harvested files (Heat uses SourceDir in generated authoring) -->
     <PublishPathFull>$([System.IO.Path]::GetFullPath('$(PublishPath)'))</PublishPathFull>
+    <HarvestSuppressSpecificWarnings>5151</HarvestSuppressSpecificWarnings>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="WixToolset.Heat" Version="4.*" />
@@ -25,7 +26,6 @@
       <ComponentGroupName>HarvestedApp</ComponentGroupName>
       <DirectoryRefId>INSTALLFOLDER</DirectoryRefId>
       <SuppressRootDirectory>true</SuppressRootDirectory>
-      <SuppressSpecificWarnings>5151</SuppressSpecificWarnings>
     </HarvestDirectory>
   </ItemGroup>
 </Project>

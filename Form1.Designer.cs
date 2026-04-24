@@ -53,6 +53,8 @@ namespace IconChop
             btnSelectAll = new Button();
             btnDeselectAll = new Button();
             flowPreview = new FlowLayoutPanel();
+            statusStripMain = new StatusStrip();
+            statusLabelMain = new ToolStripStatusLabel();
 
             panelTop.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitMain).BeginInit();
@@ -211,7 +213,7 @@ namespace IconChop
             // cboNamingAppContext — optional app description for Auto-name (MRU combo)
             cboNamingAppContext.DropDownStyle = ComboBoxStyle.DropDown;
             cboNamingAppContext.Location = new Point(395, 73);
-            cboNamingAppContext.Size = new Size(240, 23);
+            cboNamingAppContext.Size = new Size(440, 23);
             cboNamingAppContext.Anchor = AnchorStyles.Top | AnchorStyles.Left;
             cboNamingAppContext.MaxDropDownItems = 11;
             cboNamingAppContext.MaxLength = 280;
@@ -356,9 +358,13 @@ namespace IconChop
 
             // btnSelectAll (positioned on Resize; initial position for ~640px panel)
             btnSelectAll.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnSelectAll.Location = new Point(452, 5);
-            btnSelectAll.Size = new Size(82, 26);
+            btnSelectAll.Location = new Point(434, 5);
+            btnSelectAll.Size = new Size(100, 26);
             btnSelectAll.Text = "Select All";
+            btnSelectAll.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnSelectAll.ImageAlign = ContentAlignment.MiddleLeft;
+            btnSelectAll.TextAlign = ContentAlignment.MiddleCenter;
+            btnSelectAll.Padding = new Padding(6, 0, 4, 0);
             btnSelectAll.FlatStyle = FlatStyle.Flat;
             btnSelectAll.BackColor = Color.FromArgb(240, 240, 240);
             btnSelectAll.FlatAppearance.BorderColor = Color.FromArgb(180, 180, 180);
@@ -367,9 +373,13 @@ namespace IconChop
 
             // btnDeselectAll (positioned on Resize; initial position for ~640px panel)
             btnDeselectAll.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnDeselectAll.Location = new Point(540, 5);
-            btnDeselectAll.Size = new Size(82, 26);
+            btnDeselectAll.Location = new Point(538, 5);
+            btnDeselectAll.Size = new Size(112, 26);
             btnDeselectAll.Text = "Deselect All";
+            btnDeselectAll.TextImageRelation = TextImageRelation.ImageBeforeText;
+            btnDeselectAll.ImageAlign = ContentAlignment.MiddleLeft;
+            btnDeselectAll.TextAlign = ContentAlignment.MiddleCenter;
+            btnDeselectAll.Padding = new Padding(6, 0, 4, 0);
             btnDeselectAll.FlatStyle = FlatStyle.Flat;
             btnDeselectAll.BackColor = Color.FromArgb(240, 240, 240);
             btnDeselectAll.FlatAppearance.BorderColor = Color.FromArgb(180, 180, 180);
@@ -382,9 +392,24 @@ namespace IconChop
             flowPreview.BackColor = Color.White;
             flowPreview.Padding = new Padding(6);
 
+            // statusStripMain
+            statusStripMain.Dock = DockStyle.Bottom;
+            statusStripMain.Items.AddRange(new ToolStripItem[] { statusLabelMain });
+            statusStripMain.Location = new Point(0, 838);
+            statusStripMain.Size = new Size(1280, 22);
+            statusStripMain.TabIndex = 2;
+            statusStripMain.Text = "statusStripMain";
+
+            // statusLabelMain
+            statusLabelMain.Name = "statusLabelMain";
+            statusLabelMain.Spring = true;
+            statusLabelMain.Text = "Ready";
+            statusLabelMain.TextAlign = ContentAlignment.MiddleLeft;
+
             // Form1
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1280, 860);
+            Controls.Add(statusStripMain);
             Controls.Add(splitMain);
             Controls.Add(panelTop);
             Controls.Add(menuStripMain);
@@ -442,5 +467,7 @@ namespace IconChop
         private Button btnSelectAll;
         private Button btnDeselectAll;
         private FlowLayoutPanel flowPreview;
+        private StatusStrip statusStripMain;
+        private ToolStripStatusLabel statusLabelMain;
     }
 }

@@ -13,11 +13,7 @@
 
   <ItemGroup>
     <Content Include="images\icon_001.ico" />
-    <Content Include="images\folder-icon_32x32.png" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="images\clipboard-icon_32x32.png" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="images\clock-icon_32x32.png" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="images\performance-metrics-icon_32x32.png" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="images\refresh-icon_32x32.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="images\*_32x32.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 

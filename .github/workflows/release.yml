@@ -54,7 +54,9 @@ jobs:
             -p:Version=${{ steps.version.outputs.VERSION }} `
             -p:PublishPath=$publishPath `
             -p:SuppressValidation=true
-          Copy-Item bin\Release\IconChop.Setup.msi release\IconChop-${{ steps.version.outputs.VERSION }}.msi -Force
+          $msi = Get-ChildItem -Path bin -Recurse -Filter IconChop.Setup.msi -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $msi) { throw "IconChop.Setup.msi not found under bin\" }
+          Copy-Item $msi.FullName release\IconChop-${{ steps.version.outputs.VERSION }}.msi -Force
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

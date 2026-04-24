@@ -13,10 +13,14 @@ namespace IconChop
         private readonly Func<string?>? _getAutoNameAppContextForApi;
         private readonly Func<Bitmap?>? _getMainSourceImage;
 
+        private const int RefImageHistoryMax = 20;
+
         private Bitmap? _refBase1;
         private Bitmap? _refBase2;
         private Bitmap? _refBitmap1;
         private Bitmap? _refBitmap2;
+        private readonly List<Bitmap> _refHistory1 = [];
+        private readonly List<Bitmap> _refHistory2 = [];
         private readonly List<MarkupStroke> _markup1 = [];
         private readonly List<MarkupStroke> _markup2 = [];
         private Color _markupDrawColor = Color.FromArgb(220, 60, 60);
@@ -35,9 +39,9 @@ namespace IconChop
 
         private static readonly string[] CannedPrompts =
         [
-            "Create icon using style of Image 1. Generate images only, no text.",
-            "Create icons using style of the ones in Image 1 and items in Image 2. Generate images only, no text.",
-            "Create missing icons using style of the ones in Image 1 and items in Image 2. Generate images only, no text.",
+            "Match the visual style of the image on the Style reference tab. Generate icons as described in the prompt. Generate images only, no text.",
+            "Use the Missing icons tab to show gaps or areas to fill, and the Style reference tab for the look to imitate. Generate those missing icons. Generate images only, no text.",
+            "Fill missing or highlighted slots on the Missing icons sheet so the result matches the style of the Style reference sheet. Generate images only, no text.",
         ];
 
         /// <summary>List divider between canned templates and MRU (not applied as a prompt).</summary>
@@ -49,16 +53,16 @@ namespace IconChop
         public ImageGenerateForm(
             AppSettings settings,
             Func<string?>? getAutoNameAppContextForApi = null,
-            Bitmap? initialReference1FromSource = null,
+            Bitmap? initialMissingIconsImageFromSource = null,
             Func<Bitmap?>? getMainSourceImage = null)
         {
             _settings = settings;
             _getAutoNameAppContextForApi = getAutoNameAppContextForApi;
             _getMainSourceImage = getMainSourceImage;
             InitializeComponent();
-            if (initialReference1FromSource != null)
+            if (initialMissingIconsImageFromSource != null)
             {
-                SetRef(1, new Bitmap(initialReference1FromSource));
+                SetRef(1, new Bitmap(initialMissingIconsImageFromSource));
                 tabRefs.SelectedIndex = 0;
             }
 
@@ -70,6 +74,7 @@ namespace IconChop
 
             Load += ImageGenerateForm_Load;
             FormClosing += ImageGenerateForm_FormClosing;
+            FormClosed += (_, _) => DisposeToolbarButtonImages();
             cboTemplates.SelectedIndexChanged += CboTemplates_SelectedIndexChanged;
             btnGenerate.Click += BtnGenerate_Click;
             btnCancel.Click += (_, _) => Close();
@@ -77,10 +82,12 @@ namespace IconChop
             btnReject.Click += BtnReject_Click;
             btnLoad1.Click += (_, _) => LoadRefFromFile(1);
             btnFromSource1.Click += (_, _) => LoadRefFromMainSource(1);
+            btnHistory1.Click += (_, _) => ShowRefHistoryMenu(1, btnHistory1);
             btnPaste1.Click += (_, _) => PasteRef(1);
             btnClear1.Click += (_, _) => ClearRef(1);
             btnLoad2.Click += (_, _) => LoadRefFromFile(2);
             btnFromSource2.Click += (_, _) => LoadRefFromMainSource(2);
+            btnHistory2.Click += (_, _) => ShowRefHistoryMenu(2, btnHistory2);
             btnPaste2.Click += (_, _) => PasteRef(2);
             btnClear2.Click += (_, _) => ClearRef(2);
             chkIncludeAutoNameDescription.CheckedChanged += ChkIncludeAutoNameDescription_CheckedChanged;
@@ -94,6 +101,7 @@ namespace IconChop
             picRef2.MouseUp += PicRef_MouseUp;
             picRef2.PaintOverlay = g => PaintMarkupDragOverlay(g, picRef2, 2);
             SyncMarkupColorButton();
+            SyncHistoryButtonsEnabled();
         }
 
         private void ImageGenerateForm_Load(object? sender, EventArgs e)
@@ -109,6 +117,36 @@ namespace IconChop
             }
 
             RebuildTemplateCombo();
+            ApplyToolbarButtonImages();
+        }
+
+        private void ApplyToolbarButtonImages()
+        {
+            const int r = 18;
+            IconButtonImages.Set(btnLoad1, "folder-icon_32x32.png", r);
+            IconButtonImages.Set(btnLoad2, "folder-icon_32x32.png", r);
+            IconButtonImages.Set(btnFromSource1, "image-preview-icon_32x32.png", r);
+            IconButtonImages.Set(btnFromSource2, "image-preview-icon_32x32.png", r);
+            IconButtonImages.Set(btnHistory1, "clock-icon_32x32.png", r);
+            IconButtonImages.Set(btnHistory2, "clock-icon_32x32.png", r);
+            IconButtonImages.Set(btnPaste1, "clipboard-icon_32x32.png", r);
+            IconButtonImages.Set(btnPaste2, "clipboard-icon_32x32.png", r);
+            IconButtonImages.Set(btnClear1, "delete-icon_32x32.png", r);
+            IconButtonImages.Set(btnClear2, "delete-icon_32x32.png", r);
+            IconButtonImages.Set(btnGenerate, "performance-metrics-icon_32x32.png", 22);
+            IconButtonImages.Set(btnCancel, "cancel-icon_32x32.png", 22);
+            IconButtonImages.Set(btnAccept, "document-check-icon_32x32.png", 22);
+            IconButtonImages.Set(btnReject, "delete-icon_32x32.png", 22);
+        }
+
+        private void DisposeToolbarButtonImages()
+        {
+            foreach (var b in new[]
+                     {
+                         btnLoad1, btnLoad2, btnFromSource1, btnFromSource2, btnHistory1, btnHistory2, btnPaste1,
+                         btnPaste2, btnClear1, btnClear2, btnGenerate, btnCancel, btnAccept, btnReject
+                     })
+                IconButtonImages.Clear(b);
         }
 
         private void ChkIncludeAutoNameDescription_CheckedChanged(object? sender, EventArgs e)
@@ -122,6 +160,7 @@ namespace IconChop
         {
             DisposeRefSlot(1);
             DisposeRefSlot(2);
+            DisposeRefHistories();
             _previewBitmap?.Dispose();
             _previewBitmap = null;
         }
@@ -132,7 +171,7 @@ namespace IconChop
             try
             {
                 cboTemplates.Items.Clear();
-                cboTemplates.Items.Add("(Choose template or recent…)");
+                cboTemplates.Items.Add("(Choose starter prompt or recent…)");
                 foreach (var p in CannedPrompts)
                     cboTemplates.Items.Add(p);
 
@@ -183,7 +222,7 @@ namespace IconChop
             using var ofd = new OpenFileDialog
             {
                 Filter = "Image Files|*.png;*.bmp;*.jpg;*.jpeg;*.gif;*.tiff|All Files|*.*",
-                Title = slot == 1 ? "Reference image 1" : "Reference image 2"
+                Title = slot == 1 ? "Missing icons image" : "Style reference image"
             };
             if (ofd.ShowDialog(this) != DialogResult.OK) return;
             try
@@ -261,6 +300,120 @@ namespace IconChop
 
         private void ClearRef(int slot) => DisposeRefSlot(slot);
 
+        private void DisposeRefHistories()
+        {
+            foreach (var b in _refHistory1)
+                b.Dispose();
+            _refHistory1.Clear();
+            foreach (var b in _refHistory2)
+                b.Dispose();
+            _refHistory2.Clear();
+        }
+
+        private void PushRefHistorySnapshot(int slot)
+        {
+            var b = slot == 1 ? _refBase1 : _refBase2;
+            if (b == null) return;
+
+            var list = slot == 1 ? _refHistory1 : _refHistory2;
+            list.Insert(0, new Bitmap(b));
+            while (list.Count > RefImageHistoryMax)
+            {
+                var removed = list[^1];
+                list.RemoveAt(list.Count - 1);
+                removed.Dispose();
+            }
+
+            SyncHistoryButtonsEnabled();
+        }
+
+        private void SyncHistoryButtonsEnabled()
+        {
+            btnHistory1.Enabled = _refHistory1.Count > 0;
+            btnHistory2.Enabled = _refHistory2.Count > 0;
+        }
+
+        private static Bitmap MakeRefHistoryThumb(Bitmap source, int maxW, int maxH)
+        {
+            var tw = Math.Max(1, maxW);
+            var th = Math.Max(1, maxH);
+            var scale = Math.Min(tw / (float)source.Width, th / (float)source.Height);
+            var w = Math.Max(1, (int)Math.Round(source.Width * scale));
+            var h = Math.Max(1, (int)Math.Round(source.Height * scale));
+            var thumb = new Bitmap(tw, th);
+            using (var g = Graphics.FromImage(thumb))
+            {
+                g.Clear(Color.FromArgb(240, 240, 240));
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                g.CompositingQuality = CompositingQuality.HighQuality;
+                var x = (tw - w) / 2f;
+                var y = (th - h) / 2f;
+                g.DrawImage(source, x, y, w, h);
+            }
+
+            return thumb;
+        }
+
+        private static void DisposeContextMenuItemImages(ContextMenuStrip menu)
+        {
+            foreach (ToolStripItem it in menu.Items)
+            {
+                if (it is ToolStripMenuItem mi && mi.Image != null)
+                {
+                    mi.Image.Dispose();
+                    mi.Image = null;
+                }
+            }
+        }
+
+        private void ShowRefHistoryMenu(int slot, Button anchor)
+        {
+            var list = slot == 1 ? _refHistory1 : _refHistory2;
+            if (list.Count == 0)
+            {
+                MessageBox.Show(
+                    "No images in history for this tab yet. Load, paste, or copy from source to build history (up to 20).",
+                    "Image history",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            var menu = new ContextMenuStrip();
+            for (var i = 0; i < list.Count; i++)
+            {
+                var entry = list[i];
+                var thumb = MakeRefHistoryThumb(entry, 56, 56);
+                var label = $"  #{i + 1}  ({entry.Width}×{entry.Height})  ";
+                var item = new ToolStripMenuItem(label, thumb) { Tag = i };
+                var capturedIndex = i;
+                item.Click += (_, _) => ApplyRefFromHistory(slot, capturedIndex);
+                menu.Items.Add(item);
+            }
+
+            menu.Closed += OnRefHistoryMenuClosed;
+            menu.Show(anchor, new Point(0, anchor.Height));
+        }
+
+        private static void OnRefHistoryMenuClosed(object? sender, ToolStripDropDownClosedEventArgs e)
+        {
+            if (sender is not ContextMenuStrip menu) return;
+            menu.Closed -= OnRefHistoryMenuClosed;
+            DisposeContextMenuItemImages(menu);
+            menu.Dispose();
+        }
+
+        private void ApplyRefFromHistory(int slot, int historyIndex)
+        {
+            var list = slot == 1 ? _refHistory1 : _refHistory2;
+            if (historyIndex < 0 || historyIndex >= list.Count) return;
+
+            var bmp = list[historyIndex];
+            list.RemoveAt(historyIndex);
+            SetRef(slot, bmp);
+        }
+
         private void DisposeRefSlot(int slot)
         {
             if (slot == 1)
@@ -297,12 +450,14 @@ namespace IconChop
                 DisposeRefSlot(1);
                 _refBase1 = bmp;
                 RebuildRefComposite(1);
+                PushRefHistorySnapshot(1);
             }
             else
             {
                 DisposeRefSlot(2);
                 _refBase2 = bmp;
                 RebuildRefComposite(2);
+                PushRefHistorySnapshot(2);
             }
         }
 

@@ -23,7 +23,12 @@ namespace IconChop
         private const int SelectionBorderPadding = 4;
         /// <summary>Dropdown sentinel: choosing it clears context (no extra prompt text).</summary>
         private const string AutoNameAppContextNoneItem = "<no description>";
+        /// <summary>Opens the preset manager; not sent to the model.</summary>
+        private const string AutoNameAppContextManageItem = "<manage presets>";
         private bool _namingAppContextComboProgrammatic;
+        private Guid? _selectedAutoNamePresetId;
+        private string? _namingAppContextSnapshotText;
+        private Guid? _namingAppContextSnapshotPresetId;
 
         private readonly string? _initialFilePath;
         private readonly ContextMenuStrip _sourceHistoryMenu = new();
@@ -53,6 +58,9 @@ namespace IconChop
         private void Form1_FormClosed(object? sender, FormClosedEventArgs e)
         {
             DisposeMainToolbarButtonImages();
+            cboNamingAppContext.SelectedIndexChanged -= CboNamingAppContext_SelectedIndexChanged;
+            cboNamingAppContext.DropDown -= CboNamingAppContext_DropDown;
+            cboNamingAppContext.TextChanged -= CboNamingAppContext_TextChanged;
             _sourceHistoryMenu.ItemClicked -= SourceHistoryMenu_ItemClicked;
             _sourceHistoryMenu.Closed -= SourceHistoryMenu_Closed;
             DisposeSourceHistoryMenuImages();
@@ -65,48 +73,25 @@ namespace IconChop
             _previewIconContextMenu.Dispose();
         }
 
-        private static Image? LoadToolbarButtonImage(string fileName, int maxEdgePx)
-        {
-            var path = Path.Combine(AppContext.BaseDirectory, "images", fileName);
-            if (!File.Exists(path))
-                return null;
-            using var src = Image.FromFile(path);
-            var w = src.Width;
-            var h = src.Height;
-            if (w <= maxEdgePx && h <= maxEdgePx)
-                return new Bitmap(src);
-            var scale = Math.Min((double)maxEdgePx / w, (double)maxEdgePx / h);
-            var nw = Math.Max(1, (int)Math.Round(w * scale));
-            var nh = Math.Max(1, (int)Math.Round(h * scale));
-            return new Bitmap(src, new Size(nw, nh));
-        }
-
-        private static void SetToolbarButtonImage(Button btn, string fileName, int maxEdgePx)
-        {
-            var img = LoadToolbarButtonImage(fileName, maxEdgePx);
-            if (img == null)
-                return;
-            btn.Image?.Dispose();
-            btn.Image = img;
-        }
-
         private void ApplyMainToolbarButtonImages()
         {
-            SetToolbarButtonImage(btnBrowse, "folder-icon_32x32.png", 18);
-            SetToolbarButtonImage(btnSourcePaste, "clipboard-icon_32x32.png", 24);
-            SetToolbarButtonImage(btnSourceHistory, "clock-icon_32x32.png", 24);
-            SetToolbarButtonImage(btnSourceGenerate, "performance-metrics-icon_32x32.png", 24);
-            SetToolbarButtonImage(btnSourceVary, "refresh-icon_32x32.png", 24);
+            IconButtonImages.Set(btnBrowse, "folder-icon_32x32.png", 18);
+            IconButtonImages.Set(btnSourcePaste, "clipboard-icon_32x32.png", 24);
+            IconButtonImages.Set(btnSourceHistory, "clock-icon_32x32.png", 24);
+            IconButtonImages.Set(btnSourceGenerate, "performance-metrics-icon_32x32.png", 24);
+            IconButtonImages.Set(btnSourceVary, "refresh-icon_32x32.png", 24);
+            IconButtonImages.Set(btnSelectAll, "checkmark-icon_32x32.png", 18);
+            IconButtonImages.Set(btnDeselectAll, "cancel-icon_32x32.png", 18);
         }
 
         private void DisposeMainToolbarButtonImages()
         {
-            foreach (var btn in new[] { btnBrowse, btnSourcePaste, btnSourceHistory, btnSourceGenerate, btnSourceVary })
-            {
-                var img = btn.Image;
-                btn.Image = null;
-                img?.Dispose();
-            }
+            foreach (var btn in new[]
+                     {
+                         btnBrowse, btnSourcePaste, btnSourceHistory, btnSourceGenerate, btnSourceVary, btnSelectAll,
+                         btnDeselectAll
+                     })
+                IconButtonImages.Clear(btn);
         }
 
         private void Form1_Load(object? sender, EventArgs e)
@@ -135,11 +120,47 @@ namespace IconChop
 
             RebuildNamingAppContextCombo();
             cboNamingAppContext.SelectedIndexChanged += CboNamingAppContext_SelectedIndexChanged;
-            var lastCtx = _settings.LastAutoNameAppContext?.Trim();
-            if (!string.IsNullOrEmpty(lastCtx))
-                cboNamingAppContext.Text = lastCtx;
+            cboNamingAppContext.DropDown += CboNamingAppContext_DropDown;
+            cboNamingAppContext.TextChanged += CboNamingAppContext_TextChanged;
+            if (!string.IsNullOrWhiteSpace(_settings.LastAutoNamePresetId) &&
+                Guid.TryParse(_settings.LastAutoNamePresetId, out var savedPresetGuid) &&
+                FindPresetById(savedPresetGuid) is { } restoredPreset)
+            {
+                _selectedAutoNamePresetId = savedPresetGuid;
+                _namingAppContextComboProgrammatic = true;
+                try
+                {
+                    cboNamingAppContext.Text = restoredPreset.Name;
+                }
+                finally
+                {
+                    _namingAppContextComboProgrammatic = false;
+                }
+            }
+            else
+            {
+                var lastCtx = _settings.LastAutoNameAppContext?.Trim();
+                if (!string.IsNullOrEmpty(lastCtx))
+                    cboNamingAppContext.Text = lastCtx;
+            }
+
             cboNamingAppContext.Enabled = chkAutoName.Checked;
             UpdateOpenAiGenerateUiEnabled();
+            RefreshStatusFromDocument();
+        }
+
+        private void SetStatus(string text) => statusLabelMain.Text = text;
+
+        private void RefreshStatusFromDocument()
+        {
+            if (_sourceImage == null)
+            {
+                SetStatus("Ready.");
+                return;
+            }
+
+            int n = _detectedIcons.Count;
+            SetStatus($"Ready — {n} icon(s) detected, source {_sourceImage.Width}×{_sourceImage.Height}.");
         }
 
         private void Form1_FormClosing(object? sender, FormClosingEventArgs e)
@@ -170,8 +191,19 @@ namespace IconChop
                 .Take(AppSettings.InputImageMruMax)
                 .ToList();
             var appCtx = (cboNamingAppContext.Text ?? "").Trim();
-            _settings.LastAutoNameAppContext = string.IsNullOrEmpty(appCtx) ? null : appCtx;
-            PrependAutoNameAppContextMru(appCtx);
+            if (_selectedAutoNamePresetId is { } pid && FindPresetById(pid) is { } pr &&
+                string.Equals(pr.Name, appCtx, StringComparison.Ordinal))
+            {
+                _settings.LastAutoNamePresetId = pid.ToString("D");
+                _settings.LastAutoNameAppContext = pr.Name;
+                PrependAutoNamePresetMru(_settings, pid);
+            }
+            else
+            {
+                _settings.LastAutoNamePresetId = null;
+                _settings.LastAutoNameAppContext = string.IsNullOrEmpty(appCtx) ? null : appCtx;
+                PrependAutoNameAppContextMru(appCtx);
+            }
             SaveFormBounds();
             _settings.Save();
         }
@@ -249,12 +281,12 @@ namespace IconChop
             mnuImageGenerate.Enabled = configured;
         }
 
-        private void OpenImageGenerateDialog(Bitmap? initialReference1FromSource = null)
+        private void OpenImageGenerateDialog(Bitmap? initialMissingIconsImageFromSource = null)
         {
             using var dlg = new ImageGenerateForm(
                 _settings,
                 GetAutoNameAppContextForApi,
-                initialReference1FromSource,
+                initialMissingIconsImageFromSource,
                 () => _sourceImage);
             if (dlg.ShowDialog(this) == DialogResult.OK && dlg.AcceptedImage != null)
                 ApplyGeneratedImage(dlg.AcceptedImage);
@@ -307,6 +339,7 @@ namespace IconChop
             }
             catch (Exception ex)
             {
+                SetStatus($"Paste failed: {ex.Message}");
                 MessageBox.Show($"Could not paste from clipboard:\n{ex.Message}", "Paste",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -523,6 +556,7 @@ namespace IconChop
             }
             catch (Exception ex)
             {
+                SetStatus($"Load failed: {ex.Message}");
                 MessageBox.Show($"Failed to load image:\n{ex.Message}", "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -629,6 +663,7 @@ namespace IconChop
             }
 
             UpdatePreviewCountLabel();
+            RefreshStatusFromDocument();
             Cursor = Cursors.Default;
         }
 
@@ -1005,23 +1040,89 @@ namespace IconChop
         private void RebuildNamingAppContextCombo()
         {
             var saved = cboNamingAppContext.Text ?? "";
+            var savedPresetId = _selectedAutoNamePresetId;
             _namingAppContextComboProgrammatic = true;
             try
             {
                 cboNamingAppContext.Items.Clear();
                 cboNamingAppContext.Items.Add(AutoNameAppContextNoneItem);
+                cboNamingAppContext.Items.Add(AutoNameAppContextManageItem);
+                foreach (var preset in PresetsInDropdownOrder())
+                    cboNamingAppContext.Items.Add(preset.Name);
+
+                var presetNames = new HashSet<string>(
+                    _settings.AutoNameAppDescriptionPresets.Select(p => (p.Name ?? "").Trim()),
+                    StringComparer.OrdinalIgnoreCase);
+
                 foreach (var entry in _settings.AutoNameAppContextMru
                     .Where(x => !string.IsNullOrWhiteSpace(x))
                     .Where(x => !string.Equals(x.Trim(), AutoNameAppContextNoneItem, StringComparison.OrdinalIgnoreCase))
+                    .Where(x => !string.Equals(x.Trim(), AutoNameAppContextManageItem, StringComparison.OrdinalIgnoreCase))
+                    .Where(x => !presetNames.Contains(x.Trim()))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .Take(AppSettings.AutoNameAppContextMruMax))
                     cboNamingAppContext.Items.Add(entry);
                 cboNamingAppContext.Text = saved;
+                _selectedAutoNamePresetId = savedPresetId;
+                if (_selectedAutoNamePresetId is { } g && FindPresetById(g) is { } pr &&
+                    !string.Equals(pr.Name, (cboNamingAppContext.Text ?? "").Trim(), StringComparison.Ordinal))
+                    _selectedAutoNamePresetId = null;
             }
             finally
             {
                 _namingAppContextComboProgrammatic = false;
             }
+        }
+
+        private IEnumerable<AutoNameAppDescriptionPreset> PresetsInDropdownOrder()
+        {
+            var presets = _settings.AutoNameAppDescriptionPresets;
+            var seen = new HashSet<Guid>();
+            foreach (var idStr in _settings.AutoNamePresetMru)
+            {
+                if (!Guid.TryParse(idStr, out var gid)) continue;
+                var p = presets.FirstOrDefault(x => x.Id == gid);
+                if (p != null && seen.Add(p.Id))
+                    yield return p;
+            }
+
+            foreach (var p in presets.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                if (seen.Add(p.Id))
+                    yield return p;
+            }
+        }
+
+        private AutoNameAppDescriptionPreset? FindPresetById(Guid id) =>
+            _settings.AutoNameAppDescriptionPresets.FirstOrDefault(p => p.Id == id);
+
+        private void CboNamingAppContext_DropDown(object? sender, EventArgs e)
+        {
+            _namingAppContextSnapshotText = cboNamingAppContext.Text;
+            _namingAppContextSnapshotPresetId = _selectedAutoNamePresetId;
+        }
+
+        private void RestoreNamingAppContextFromSnapshot()
+        {
+            _namingAppContextComboProgrammatic = true;
+            try
+            {
+                _selectedAutoNamePresetId = _namingAppContextSnapshotPresetId;
+                cboNamingAppContext.Text = _namingAppContextSnapshotText ?? "";
+            }
+            finally
+            {
+                _namingAppContextComboProgrammatic = false;
+            }
+        }
+
+        private void CboNamingAppContext_TextChanged(object? sender, EventArgs e)
+        {
+            if (_namingAppContextComboProgrammatic) return;
+            if (_selectedAutoNamePresetId is not { } gid || FindPresetById(gid) is not { } pr) return;
+            var t = (cboNamingAppContext.Text ?? "").Trim();
+            if (!string.Equals(pr.Name, t, StringComparison.Ordinal))
+                _selectedAutoNamePresetId = null;
         }
 
         private void CboNamingAppContext_SelectedIndexChanged(object? sender, EventArgs e)
@@ -1029,27 +1130,74 @@ namespace IconChop
             if (_namingAppContextComboProgrammatic) return;
             if (cboNamingAppContext.SelectedIndex < 0) return;
             if (cboNamingAppContext.SelectedItem is not string s) return;
-            if (!string.Equals(s, AutoNameAppContextNoneItem, StringComparison.OrdinalIgnoreCase)) return;
-            _namingAppContextComboProgrammatic = true;
-            try
+
+            if (string.Equals(s, AutoNameAppContextManageItem, StringComparison.OrdinalIgnoreCase))
             {
-                cboNamingAppContext.Text = "";
-                cboNamingAppContext.SelectedIndex = -1;
+                using (var dlg = new AutoNamePresetsForm(_settings))
+                    dlg.ShowDialog(this);
+                RebuildNamingAppContextCombo();
+                RestoreNamingAppContextFromSnapshot();
+                return;
             }
-            finally
+
+            if (string.Equals(s, AutoNameAppContextNoneItem, StringComparison.OrdinalIgnoreCase))
             {
-                _namingAppContextComboProgrammatic = false;
+                _selectedAutoNamePresetId = null;
+                _namingAppContextComboProgrammatic = true;
+                try
+                {
+                    cboNamingAppContext.Text = "";
+                    cboNamingAppContext.SelectedIndex = -1;
+                }
+                finally
+                {
+                    _namingAppContextComboProgrammatic = false;
+                }
+
+                return;
             }
+
+            var preset = _settings.AutoNameAppDescriptionPresets.FirstOrDefault(p =>
+                string.Equals(p.Name, s, StringComparison.Ordinal));
+            if (preset != null)
+            {
+                _selectedAutoNamePresetId = preset.Id;
+                PrependAutoNamePresetMru(_settings, preset.Id);
+                _namingAppContextComboProgrammatic = true;
+                try
+                {
+                    cboNamingAppContext.Text = preset.Name;
+                }
+                finally
+                {
+                    _namingAppContextComboProgrammatic = false;
+                }
+
+                return;
+            }
+
+            _selectedAutoNamePresetId = null;
         }
 
         private static void PrependAutoNameAppContextMru(AppSettings settings, string trimmedContext)
         {
             if (string.IsNullOrEmpty(trimmedContext)) return;
             if (string.Equals(trimmedContext, AutoNameAppContextNoneItem, StringComparison.OrdinalIgnoreCase)) return;
+            if (string.Equals(trimmedContext, AutoNameAppContextManageItem, StringComparison.OrdinalIgnoreCase)) return;
             settings.AutoNameAppContextMru = settings.AutoNameAppContextMru
                 .Where(x => !string.Equals(x, trimmedContext, StringComparison.OrdinalIgnoreCase))
                 .Prepend(trimmedContext)
                 .Take(AppSettings.AutoNameAppContextMruMax)
+                .ToList();
+        }
+
+        private static void PrependAutoNamePresetMru(AppSettings settings, Guid presetId)
+        {
+            var idStr = presetId.ToString("D");
+            settings.AutoNamePresetMru = settings.AutoNamePresetMru
+                .Where(x => !string.Equals(x, idStr, StringComparison.OrdinalIgnoreCase))
+                .Prepend(idStr)
+                .Take(AppSettings.AutoNamePresetMruMax)
                 .ToList();
         }
 
@@ -1060,6 +1208,18 @@ namespace IconChop
 
         private string? GetAutoNameAppContextForApi()
         {
+            if (_selectedAutoNamePresetId is { } gid)
+            {
+                var preset = FindPresetById(gid);
+                if (preset != null)
+                {
+                    var d = (preset.Description ?? "").Trim();
+                    return string.IsNullOrEmpty(d) ? null : d;
+                }
+
+                _selectedAutoNamePresetId = null;
+            }
+
             var t = (cboNamingAppContext.Text ?? "").Trim();
             return string.IsNullOrEmpty(t) ? null : t;
         }
@@ -1100,6 +1260,7 @@ namespace IconChop
             try
             {
                 Cursor = Cursors.WaitCursor;
+                SetStatus("Exporting…");
 
                 string[] autoNames = [];
 
@@ -1109,6 +1270,7 @@ namespace IconChop
                     if (string.IsNullOrEmpty(key))
                     {
                         Cursor = Cursors.Default;
+                        RefreshStatusFromDocument();
                         MessageBox.Show(
                             "Auto-name requires an OpenAI API key.\nConfigure it in Tools \u2192 Settings (Open AI tab).",
                             "API key required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -1122,7 +1284,25 @@ namespace IconChop
                         var names = await OpenAiImageClient.SuggestFilenamesAsync(
                             _settings, iconsToName, appCtx, CancellationToken.None);
                         autoNames = [.. names];
-                        if (appCtx != null)
+                        if (_selectedAutoNamePresetId is { } chopPresetId && FindPresetById(chopPresetId) is { } chopPreset)
+                        {
+                            var d = (chopPreset.Description ?? "").Trim();
+                            if (!string.IsNullOrEmpty(d))
+                            {
+                                PrependAutoNamePresetMru(_settings, chopPresetId);
+                                RebuildNamingAppContextCombo();
+                                _namingAppContextComboProgrammatic = true;
+                                try
+                                {
+                                    cboNamingAppContext.Text = chopPreset.Name;
+                                }
+                                finally
+                                {
+                                    _namingAppContextComboProgrammatic = false;
+                                }
+                            }
+                        }
+                        else if (appCtx != null)
                         {
                             PrependAutoNameAppContextMru(appCtx);
                             RebuildNamingAppContextCombo();
@@ -1136,8 +1316,13 @@ namespace IconChop
                             $"Auto-naming failed:\n{ex.Message}\n\nExport with default naming instead?",
                             "Auto-name error", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
                         if (result != DialogResult.Yes)
+                        {
+                            RefreshStatusFromDocument();
                             return;
+                        }
+
                         Cursor = Cursors.WaitCursor;
+                        SetStatus("Exporting…");
                     }
                 }
 
@@ -1203,14 +1388,17 @@ namespace IconChop
                 }
 
                 Cursor = Cursors.Default;
+                SetStatus($"Export complete — {written} file(s) written.");
                 MessageBox.Show($"Successfully exported {written} icon files.",
                     "Export complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
                 Cursor = Cursors.Default;
+                SetStatus("Export failed.");
                 MessageBox.Show($"Export failed:\n{ex.Message}", "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
+                RefreshStatusFromDocument();
             }
         }
 

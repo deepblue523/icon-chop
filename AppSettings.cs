@@ -5,7 +5,7 @@ namespace IconChop
         public string? LastInputPath { get; set; }
         /// <summary>Recently opened source image files (newest first), max <see cref="InputImageMruMax"/>.</summary>
         public List<string> InputImageMru { get; set; } = [];
-        public const int InputImageMruMax = 10;
+        public const int InputImageMruMax = 20;
         public bool AutoReloadInput { get; set; } = true;
         public HashSet<int> CheckedSizes { get; set; } = [32, 48, 64];
         public string? LastOutputDir { get; set; }
@@ -18,6 +18,16 @@ namespace IconChop
         /// <summary>Recent app descriptions for Auto-name (newest first), max <see cref="AutoNameAppContextMruMax"/>.</summary>
         public List<string> AutoNameAppContextMru { get; set; } = [];
         public const int AutoNameAppContextMruMax = 10;
+
+        /// <summary>User-defined description presets for Auto-name (name + long description for the API).</summary>
+        public List<AutoNameAppDescriptionPreset> AutoNameAppDescriptionPresets { get; set; } = [];
+
+        /// <summary>Preset <see cref="AutoNameAppDescriptionPreset.Id"/> values recently chosen (newest first).</summary>
+        public List<string> AutoNamePresetMru { get; set; } = [];
+        public const int AutoNamePresetMruMax = 24;
+
+        /// <summary>When set, <see cref="LastAutoNameAppContext"/> is the preset display name for this id.</summary>
+        public string? LastAutoNamePresetId { get; set; }
         public List<string> OutputDirMru { get; set; } = [];
         public const int MruMax = 12;
 
@@ -84,6 +94,9 @@ namespace IconChop
                     var settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
                     var loaded = settings ?? new AppSettings();
                     loaded.InputImageMru ??= [];
+                    loaded.AutoNameAppContextMru ??= [];
+                    loaded.AutoNameAppDescriptionPresets ??= [];
+                    loaded.AutoNamePresetMru ??= [];
                     return loaded;
                 }
 
@@ -93,6 +106,9 @@ namespace IconChop
                     var settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
                     var result = settings ?? new AppSettings();
                     result.InputImageMru ??= [];
+                    result.AutoNameAppContextMru ??= [];
+                    result.AutoNameAppDescriptionPresets ??= [];
+                    result.AutoNamePresetMru ??= [];
                     try
                     {
                         result.Save();
